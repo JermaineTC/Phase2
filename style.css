@@ -157,7 +157,7 @@ body {
 }
 
 /* ---------- Citation highlights ---------- */
-/* Every citation is a <span class="paste-flag level-<level> status-<status>"> */
+/* Every unverified citation is a <span class="paste-flag level-<level>"> */
 .paste-flag {
   cursor: pointer;
   border-radius: 3px;
@@ -181,18 +181,8 @@ body {
   border-bottom: 2px dotted var(--quiet-line);
 }
 
-/* Status overrides (after the student acts) */
-.paste-flag.status-verified,
-.swatch.status-verified {
-  background: var(--verified-bg);
-  border-bottom: 2px solid var(--verified-line);
-}
-
-.paste-flag.status-dismissed,
-.swatch.status-dismissed {
-  background: var(--dismissed-bg);
-  border-bottom: 2px solid var(--dismissed-line);
-}
+/* Verified and dismissed citations have NO highlight: app.js turns them
+   back into plain text, so there are no styles for them here. */
 
 /* ---------- Pop-up ---------- */
 /* Positioned by app.js (top/left) just below the highlighted span */

@@ -8,11 +8,13 @@
  *   4. riskScore()                detector.js – score the results
  *   5. decideInterruptionLevel()  detector.js – "problem" / "likely-supported" / "quiet"
  * Each citation is then wrapped in its own highlight:
- *   <span class="paste-flag level-<level> status-<status>" data-id="c1">
+ *   <span class="paste-flag level-<level>" data-id="c1">
  * The pop-up opens automatically ONLY for "problem" citations; the
  * others open their pop-up when clicked.
  *
  * Status of each citation: "unverified" | "verified" | "dismissed".
+ * Only unverified citations stay highlighted; Verify and Dismiss turn the
+ * citation back into normal text (Undo after Dismiss restores it).
  *
  * This file is loaded LAST in index.html, because it uses functions and
  * objects defined in the other script files.
@@ -161,9 +163,13 @@ function createCitationSpan(record) {
   return span;
 }
 
-/** CSS classes for a citation's highlight, based on its level and status. */
+/**
+ * CSS classes for a citation's highlight, based on its interruption level.
+ * (Only unverified citations have a highlight; verified and dismissed
+ * citations are turned back into plain text.)
+ */
 function getSpanClass(record) {
-  return "paste-flag level-" + record.level + " status-" + record.status;
+  return "paste-flag level-" + record.level;
 }
 
 /**
@@ -236,14 +242,51 @@ function isInEditor(id) {
 // 4. Status and counter
 // ---------------------------------------------------------------
 
-/** Changes a citation's status and refreshes its highlight and the counter. */
+/** Changes a citation's status and refreshes the counter. */
 function setStatus(id, newStatus) {
-  const record = getRecord(id);
-  record.status = newStatus;
-  getSpansForRecord(id).forEach(function (span) {
-    span.className = getSpanClass(record);
-  });
+  getRecord(id).status = newStatus;
   updateCounter();
+}
+
+/**
+ * Removes a citation's highlight: each of its spans is replaced by a plain
+ * text node with the same text, so it becomes normal editor text and new
+ * typing can never end up inside an old highlight.
+ *
+ * The {span, textNode} pairs are saved on the record so that
+ *   - Undo (after Dismiss) can swap the span back in, and
+ *   - we can still find the text later.
+ * We deliberately do NOT call editor.normalize() (which merges neighbouring
+ * text nodes), because that would throw away the saved text nodes.
+ */
+function unwrapHighlight(id) {
+  const record = getRecord(id);
+  record.unwrapped = [];
+  getSpansForRecord(id).forEach(function (span) {
+    const textNode = document.createTextNode(span.textContent);
+    span.replaceWith(textNode);
+    record.unwrapped.push({ span: span, textNode: textNode });
+  });
+}
+
+/**
+ * Puts a citation's highlight back (used by Undo).
+ * Only works if the plain text is still in the editor and unchanged.
+ * Returns true if at least one span was restored.
+ */
+function rewrapHighlight(id) {
+  const record = getRecord(id);
+  let restored = false;
+  (record.unwrapped || []).forEach(function (pair) {
+    const stillThere = editor.contains(pair.textNode) && pair.textNode.data === pair.span.textContent;
+    if (stillThere) {
+      pair.span.className = getSpanClass(record); // same level as before
+      pair.textNode.replaceWith(pair.span);
+      restored = true;
+    }
+  });
+  record.unwrapped = null;
+  return restored;
 }
 
 /**
@@ -455,11 +498,12 @@ popup.addEventListener("click", function (event) {
   }
 });
 
-/** Verify: the student says they have checked the source. */
+/** Verify: the student says they have checked the source. Highlight is removed. */
 function verifyRecord(id) {
+  closePopup();
+  unwrapHighlight(id);
   setStatus(id, "verified");
   logEvent("verify", id);
-  closePopup();
 }
 
 /** Edit: close the pop-up and put the cursor at the end of the citation. */
@@ -478,22 +522,29 @@ function editRecord(id) {
   logEvent("edit", id);
 }
 
-/** Dismiss: mark as dismissed and offer Undo for a few seconds. */
+/** Dismiss: remove the highlight, mark as dismissed and offer Undo for a few seconds. */
 function dismissRecord(id) {
   const record = getRecord(id);
   record.statusBeforeDismiss = record.status;
+  closePopup();
+  unwrapHighlight(id);
   setStatus(id, "dismissed");
   logEvent("dismiss", id);
-  closePopup();
   showUndoToast(id);
 }
 
-/** Undo a dismiss: put back the status the citation had before. */
+/** Undo a dismiss: restore the highlight (same level) and the previous status. */
 function undoDismiss(id) {
   const record = getRecord(id);
   if (record && record.status === "dismissed") {
-    setStatus(id, record.statusBeforeDismiss || "unverified");
-    logEvent("undo-dismiss", id);
+    if (rewrapHighlight(id)) {
+      setStatus(id, record.statusBeforeDismiss || "unverified");
+      logEvent("undo-dismiss", id);
+    } else {
+      // The text was edited or deleted in the meantime, so there is
+      // nothing to put the highlight back on. It stays dismissed.
+      console.log("[undo] could not restore highlight for " + id + ": text changed");
+    }
   }
   hideToast();
 }
