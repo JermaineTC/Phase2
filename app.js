@@ -60,6 +60,7 @@ function handlePaste(event) {
 
   // Not worth flagging: paste normally, no highlight, no pop-up.
   if (!risk.flagged) {
+    closePopup(); // close any pop-up left open from an earlier paste
     insertAtCursor(document.createTextNode(text), false);
     updateCounter();
     return;
