@@ -105,6 +105,8 @@ function handlePaste(event) {
   citations.forEach(function (citation) {
     citation.existence = lookupReference(citation);   // "found" / "not_found"
     citation.reference = findReference(citation);     // matched entry or null
+    // How it matched: "author-year", "title" (fallback) or null (not found)
+    citation.matchedBy = citation.reference ? (findByAuthorYear(citation) ? "author-year" : "title") : null;
     citation.support = checkSupport(citation.claim, citation.reference);
     citation.risk = riskScore(citation, text, citations.length);
     citation.level = decideInterruptionLevel(citation, citation.risk);
@@ -523,6 +525,9 @@ function renderPopup(record) {
   if (record.reference) {
     html += '<div class="matched-ref">Matched: <em>' + escapeHtml(record.reference.title) +
             "</em> (" + escapeHtml(record.reference.venue) + ")</div>";
+  }
+  if (record.matchedBy === "title") {
+    html += '<div class="matched-ref">' + escapeHtml(PROMPTS.matchedByTitle) + "</div>";
   }
 
   // Support result (only meaningful when the reference was found)

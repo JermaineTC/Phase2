@@ -4,6 +4,7 @@
  *
  * Public functions (used by app.js):
  *   findReference(citation)            -> the matching entry from REFERENCES, or null
+ *   findByAuthorYear(citation)         -> match on first author + year only (or null)
  *   lookupReference(citation)          -> "found" | "not_found"
  *   checkSupport(claimText, reference) -> "supported" | "partial" | "not_supported" | "unknown"
  *
@@ -17,7 +18,11 @@ const LOOKUP_CONFIG = {
   // Proportion of the claim's keywords that must appear in the keyQuote.
   supportedThreshold: 0.6, // 60% or more -> "supported"
   partialThreshold: 0.3,   // 30% to 59%  -> "partial", below -> "not_supported"
-  minWordLength: 3         // ignore very short words like "ai", "is"
+  minWordLength: 3,        // ignore very short words like "ai", "is"
+
+  // Title fallback: proportion of a stored title's main words that must
+  // appear in a reference-list line for it to count as the same paper.
+  titleMatchThreshold: 0.6
 };
 
 // Common words that carry little meaning, so they are ignored when
@@ -51,12 +56,20 @@ function normaliseName(name) {
 }
 
 /**
- * Finds the entry in REFERENCES whose FIRST author and year match the citation.
+ * Finds the matching entry in REFERENCES, or null.
+ *   1. First try: same FIRST author and same year.
+ *   2. Fallback (reference-list lines only): enough of the stored title's
+ *      main words appear in the cited title (see findByTitle).
  * TODO(me): improve matching
- *   (e.g. also compare titles for reference-list lines, allow small typos,
- *    handle two different papers by the same first author in the same year)
+ *   (e.g. allow small typos, handle two different papers by the same
+ *    first author in the same year)
  */
 function findReference(citation) {
+  return findByAuthorYear(citation) || findByTitle(citation);
+}
+
+/** Step 1: same first author (ignoring case and accents) and same year. */
+function findByAuthorYear(citation) {
   if (!citation.authors || citation.authors.length === 0) {
     return null;
   }
@@ -71,6 +84,41 @@ function findReference(citation) {
     }
   }
   return null;
+}
+
+/**
+ * Step 2 (fallback): only for reference-list lines, which include a title.
+ * For each stored reference, take the main words of its title (keywords,
+ * see extractKeywords) and work out what proportion of them appear in the
+ * cited line's title + venue text. The best match at or above
+ * LOOKUP_CONFIG.titleMatchThreshold is returned.
+ * We search the title AND venue text because our simple title extraction
+ * stops at the first "?" or ".", which cuts titles like
+ * "Does the whole exceed its parts? The effect of ..." in half.
+ */
+function findByTitle(citation) {
+  if (citation.type !== "reference-list" || !citation.titleAndVenue) {
+    return null;
+  }
+  const citedWords = extractKeywords(citation.titleAndVenue);
+
+  let bestReference = null;
+  let bestProportion = 0;
+  REFERENCES.forEach(function (reference) {
+    const titleWords = extractKeywords(reference.title);
+    if (titleWords.length === 0) {
+      return;
+    }
+    const matched = titleWords.filter(function (word) {
+      return citedWords.indexOf(word) !== -1;
+    });
+    const proportion = matched.length / titleWords.length;
+    if (proportion >= LOOKUP_CONFIG.titleMatchThreshold && proportion > bestProportion) {
+      bestReference = reference;
+      bestProportion = proportion;
+    }
+  });
+  return bestReference;
 }
 
 /** "found" if the citation matches an entry in the local list, otherwise "not_found". */

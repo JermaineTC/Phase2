@@ -27,6 +27,9 @@ const PROMPTS = {
     }
   },
 
+  // Shown when the reference was only found by the title fallback
+  matchedByTitle: "Matched by title only – the authors or year you gave differ from the stored entry. Please check them.",
+
   // Result of checkSupport()
   support: {
     supported: {
