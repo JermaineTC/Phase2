@@ -152,13 +152,6 @@ function buildPasteFragment(text, citations) {
   if (position < text.length) {
     fragment.appendChild(document.createTextNode(text.slice(position)));
   }
-
-  // If the paste ends with a highlight, add a zero-width space after it.
-  // Why? Browsers (especially Chrome) tend to put the cursor back INSIDE
-  // the span, so anything typed next would join the highlight.
-  if (fragment.lastChild && fragment.lastChild.nodeType === Node.ELEMENT_NODE) {
-    fragment.appendChild(document.createTextNode("​"));
-  }
   return fragment;
 }
 
@@ -185,8 +178,12 @@ function getSpanClass(record) {
  * Inserts a DOM node (text node, <span> or fragment) where the cursor is.
  * If some text is selected, it is replaced (like a normal paste).
  *
- * avoidNesting: when true and the cursor is inside an existing highlight,
- * the node is inserted AFTER that highlight so highlights are never nested.
+ * Pasted text never joins a highlight by accident:
+ *   - at the START or END of a highlight, it is inserted just outside it
+ *     (same rule as typing, see section 3b);
+ *   - avoidNesting: when true and the cursor is in the MIDDLE of a
+ *     highlight, the node is inserted after that highlight, so highlights
+ *     are never nested inside each other.
  */
 function insertAtCursor(node, avoidNesting) {
   const selection = window.getSelection();
@@ -202,7 +199,14 @@ function insertAtCursor(node, avoidNesting) {
     range.collapse(false); // false = collapse to the end
   }
 
-  if (avoidNesting) {
+  const edge = getHighlightEdge(range.startContainer, range.startOffset);
+  if (edge && edge.side === "start") {
+    range.setStartBefore(edge.span);
+    range.collapse(true);
+  } else if (edge && edge.side === "end") {
+    range.setStartAfter(edge.span);
+    range.collapse(true);
+  } else if (avoidNesting) {
     const parentFlag = findFlagSpan(range.startContainer);
     if (parentFlag) {
       range.setStartAfter(parentFlag);
@@ -246,6 +250,138 @@ function getSpansForRecord(id) {
 function isInEditor(id) {
   return getSpansForRecord(id).length > 0;
 }
+
+// ---------------------------------------------------------------
+// 3b. Highlight boundary: new text never goes inside a highlight
+// ---------------------------------------------------------------
+/*
+ * The problem: when the cursor is at the very end (or start) of a
+ * highlight span – e.g. after clicking just behind a citation – browsers
+ * put typed text INSIDE the span, so the new text gets highlighted too.
+ *
+ * The approach:
+ *   1. The "beforeinput" event fires just BEFORE the browser inserts
+ *      anything, and it can be cancelled with preventDefault().
+ *   2. If the cursor is at the edge of a highlight, we cancel the
+ *      browser's insert and insert the text ourselves into a plain text
+ *      node just OUTSIDE the span, then put the cursor after it.
+ *   3. Once the cursor is inside that plain text node, the browser's
+ *      normal typing continues there, so we only step in at the edge.
+ * Typing in the MIDDLE of a highlight is left alone: that is the student
+ * editing the citation itself.
+ */
+
+/**
+ * If the cursor position (node, offset) touches the start or end of a
+ * highlight, returns { span, side: "start" | "end" }, otherwise null.
+ */
+function getHighlightEdge(node, offset) {
+  // Case 1: the cursor is INSIDE a highlight – is it at its first or last character?
+  const span = findFlagSpan(node);
+  if (span) {
+    const textBefore = document.createRange();
+    textBefore.selectNodeContents(span);
+    textBefore.setEnd(node, offset);
+    const charsBefore = textBefore.toString().length;
+    if (charsBefore === 0) {
+      return { span: span, side: "start" };
+    }
+    if (charsBefore === span.textContent.length) {
+      return { span: span, side: "end" };
+    }
+    return null; // in the middle
+  }
+
+  // Case 2: the cursor is between elements, directly after a highlight
+  // (e.g. right after a paste that ends with a citation).
+  if (node.nodeType === Node.ELEMENT_NODE && offset > 0) {
+    const before = node.childNodes[offset - 1];
+    if (before && before.nodeType === Node.ELEMENT_NODE && before.classList.contains("paste-flag")) {
+      return { span: before, side: "end" };
+    }
+  }
+
+  // Case 3: the cursor is at the very start of a text node that directly
+  // follows a highlight (browsers treat this like the end of the highlight).
+  if (node.nodeType === Node.TEXT_NODE && offset === 0) {
+    const previous = node.previousSibling;
+    if (previous && previous.nodeType === Node.ELEMENT_NODE && previous.classList.contains("paste-flag")) {
+      return { span: previous, side: "end" };
+    }
+  }
+  return null;
+}
+
+/**
+ * Inserts text just outside a highlight and puts the cursor after it.
+ * Re-uses the neighbouring text node if there is one, otherwise creates one.
+ */
+function insertOutsideHighlight(span, side, text) {
+  let textNode;
+  let cursorOffset;
+
+  if (side === "end") {
+    const next = span.nextSibling;
+    if (next && next.nodeType === Node.TEXT_NODE) {
+      next.insertData(0, text);   // add to the start of the following text
+      textNode = next;
+    } else {
+      textNode = document.createTextNode(text);
+      span.after(textNode);
+    }
+    cursorOffset = text.length;
+  } else {
+    const previous = span.previousSibling;
+    if (previous && previous.nodeType === Node.TEXT_NODE) {
+      previous.appendData(text);  // add to the end of the preceding text
+      textNode = previous;
+    } else {
+      textNode = document.createTextNode(text);
+      span.before(textNode);
+    }
+    cursorOffset = textNode.length;
+  }
+
+  // Special case: a new line at the very END of the editor. A single "\n"
+  // at the end of the text is not drawn as a new line, so the browser
+  // would move the cursor back into the highlight. Adding a second "\n"
+  // gives the cursor a real place on the new line (the last "\n" stays
+  // invisible).
+  if (text === "\n" && cursorOffset === textNode.length && !textNode.nextSibling) {
+    textNode.appendData("\n");
+  }
+
+  // Put the cursor right after the inserted text.
+  const range = document.createRange();
+  range.setStart(textNode, cursorOffset);
+  range.collapse(true);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+editor.addEventListener("beforeinput", function (event) {
+  // Only typing a character and pressing Enter / Shift+Enter are handled.
+  let text;
+  if (event.inputType === "insertText") {
+    text = event.data;
+  } else if (event.inputType === "insertParagraph" || event.inputType === "insertLineBreak") {
+    text = "\n"; // the editor uses white-space: pre-wrap, so "\n" shows as a new line
+  } else {
+    return;
+  }
+
+  const selection = window.getSelection();
+  if (!text || selection.rangeCount === 0 || !selection.isCollapsed) {
+    return; // nothing to insert, or some text is selected: let the browser handle it
+  }
+
+  const edge = getHighlightEdge(selection.anchorNode, selection.anchorOffset);
+  if (edge) {
+    event.preventDefault(); // stop the browser inserting inside the span
+    insertOutsideHighlight(edge.span, edge.side, text);
+  }
+});
 
 // ---------------------------------------------------------------
 // 4. Status and counter
