@@ -59,6 +59,14 @@ function handlePaste(event) {
     return;
   }
 
+  // Step 3 + 4: SIMULATED existence and support checks (lookup.js).
+  // The results are stored on each citation object.
+  citations.forEach(function (citation) {
+    citation.existence = lookupReference(citation);    // "found" / "not_found"
+    citation.reference = findReference(citation);      // matched entry or null
+    citation.support = checkSupport(citation.claim, citation.reference);
+  });
+
   // Remember this paste so the pop-up and counter can use it later.
   const id = "p" + nextPasteId;
   nextPasteId++;
@@ -67,7 +75,7 @@ function handlePaste(event) {
     text: text,
     citations: citations,
     risk: risk,
-    status: "unverified",
+    status: getInitialStatus(citations),
     statusBeforeDismiss: null // used by Undo
   };
 
@@ -159,6 +167,14 @@ function getSpansForPaste(id) {
 // ---------------------------------------------------------------
 // 4. Status and counter
 // ---------------------------------------------------------------
+
+/** A paste starts as "not-found" if any of its references was not found. */
+function getInitialStatus(citations) {
+  const anyNotFound = citations.some(function (citation) {
+    return citation.existence === "not_found";
+  });
+  return anyNotFound ? "not-found" : "unverified";
+}
 
 /** Changes a paste's status and refreshes its colour and the counter. */
 function setStatus(id, newStatus) {
