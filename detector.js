@@ -12,7 +12,7 @@
  *     raw:     "(Bansal et al., 2021)",   // the exact text that matched
  *     start:   57,                        // position of raw in the pasted text
  *     end:     78,                        // position just after raw
- *     type:    "in-text" or "reference-list",
+ *     type:    "in-text", "narrative" or "reference-list",
  *     authors: ["Bansal"],                 // surnames we could read
  *     year:    2021,
  *     title:   "",                         // only for reference-list lines
@@ -68,27 +68,60 @@ const DETECTOR_CONFIG = {
 // À-Þ = accented capitals, À-ÿ = accented letters.
 const SURNAME = "[A-Z\\u00C0-\\u00DE][A-Za-z\\u00C0-\\u00FF'\\-]+";
 
+// Optional lowercase prefixes before a surname, e.g. "van der Berg",
+// "de Souza", "von Ahn". (?: ... )* means "zero or more of these words".
+const SURNAME_PREFIX = "(?:(?:van|von|der|den|de|da|di|du|del|della|dos|das|la|le|ter|ten)\\s+)*";
+
+// A full surname = optional prefixes + the capitalised surname itself.
+const FULL_SURNAME = SURNAME_PREFIX + SURNAME;
+
+// Optional page numbers after the year: ", p. 4" or ", pp. 4–6"
+// (– is the en dash "–", which is normally used in page ranges).
+const PAGES = "(?:,\\s*pp?\\.\\s*\\d+(?:\\s*[\\u2013\\-]\\s*\\d+)?)?";
+
+// PLANNED: numbered citations such as "[1]" or "[2, 3]" (IEEE style) are
+// out of scope for now – they need a reference list to be resolved.
+
 // ---------------------------------------------------------------
 // Regular expressions
 // ---------------------------------------------------------------
 
-// Any bracket group that ends in a 4-digit year, e.g. "(Smith et al., 2021)"
-// or "(Smith, 2020; Jones & Lee, 2021)". The group content is captured.
+// Any bracket group that ends in a 4-digit year (plus optional pages),
+// e.g. "(Smith et al., 2021)", "(Smith, 2021, p. 4)" or
+// "(Smith, 2020; Jones & Lee, 2021)". The group content is captured.
 // [^()]* means "any characters except brackets".
-const BRACKET_WITH_YEAR = /\(([^()]*\d{4}[a-z]?)\)/g;
+const BRACKET_WITH_YEAR = new RegExp("\\(([^()]*\\d{4}[a-z]?" + PAGES + ")\\)", "g");
 
-// One citation inside a bracket group: "<authors>, <year>".
+// One citation inside a bracket group: "<authors>, <year>[, p. 4]".
 // Optional "e.g." or "see" at the start is skipped.
 // Group 1 = authors text, group 2 = year.
-const IN_TEXT_PART = /^\s*(?:e\.g\.,?\s*|see\s+)?(.+?),?\s+(\d{4})[a-z]?\s*$/;
+const IN_TEXT_PART = new RegExp("^\\s*(?:e\\.g\\.,?\\s*|see\\s+)?(.+?),?\\s+(\\d{4})[a-z]?" + PAGES + "\\s*$");
+
+// A narrative citation, where the author is part of the sentence:
+// "Smith (2021)", "Smith and Jones (2021)", "Smith & Jones (2021)",
+// "Smith et al. (2021)", "van der Berg (2024, p. 3)".
+// \b = start of a word. Group 1 = first author, group 2 = second author
+// (if any), group 3 = year.
+const NARRATIVE = new RegExp(
+  "\\b(" + FULL_SURNAME + ")" +                                   // first author
+  "(?:\\s+et al\\.?|\\s+(?:and|&)\\s+(" + FULL_SURNAME + "))?" +   // "et al." or a second author
+  "\\s+\\((\\d{4})[a-z]?" + PAGES + "\\)",                         // "(2021)" or "(2021, p. 4)"
+  "g"
+);
 
 // A reference-list line: "<authors> (<year>). <title>. <venue>."
 // Group 1 = authors text, group 2 = year, group 3 = the rest (title + venue).
 const REFERENCE_LINE = /^\s*(.+?)\s*\((\d{4})[a-z]?\)\.\s*(.*)$/;
 
 // Inside a reference-list author part, each author is "Surname, I. I."
-// e.g. "Skitka, L. J., Mosier, K. L., & Burdick, M."
-const SURNAME_WITH_INITIALS = new RegExp("(" + SURNAME + "),\\s+(?:[A-Z]\\.\\s*-?)+", "g");
+// e.g. "Skitka, L. J., Mosier, K. L., & Burdick, M." or "van der Berg, J."
+const SURNAME_WITH_INITIALS = new RegExp("(" + FULL_SURNAME + "),\\s+(?:[A-Z]\\.\\s*-?)+", "g");
+
+// Used to remove other citations from a claim sentence. (A separate copy of
+// NARRATIVE is needed: a global regex remembers its position (lastIndex),
+// so sharing one regex between two loops would break both.)
+const BRACKET_CITATION_TO_REMOVE = new RegExp("\\([^()]*\\d{4}[a-z]?" + PAGES + "\\)", "g");
+const NARRATIVE_CITATION_TO_REMOVE = new RegExp(NARRATIVE.source, "g");
 
 // ---------------------------------------------------------------
 // extractCitations
@@ -102,7 +135,11 @@ function extractCitations(text) {
   while ((match = BRACKET_WITH_YEAR.exec(text)) !== null) {
     const bracketText = match[1];
     const bracketStart = match.index; // position of "("
-    const claim = getClaimForPosition(text, bracketStart);
+    const bracketEnd = bracketStart + match[0].length;
+
+    // All citations in one bracket support the same claim: the sentence
+    // without the whole bracket.
+    const claim = getClaim(text, bracketStart, bracketEnd);
 
     // A bracket may hold several citations separated by ";"
     const parts = bracketText.split(";");
@@ -127,7 +164,7 @@ function extractCitations(text) {
       let start, end;
       if (parts.length === 1) {
         start = bracketStart;
-        end = bracketStart + match[0].length;
+        end = bracketEnd;
       } else {
         start = thisPartStart + (part.length - part.trimStart().length);
         end = thisPartStart + part.trimEnd().length;
@@ -146,7 +183,28 @@ function extractCitations(text) {
     });
   }
 
-  // --- 2. Reference-list lines: Smith, J. (2021). Title. Venue. ---
+  // --- 2. Narrative citations: Smith et al. (2021) found that ... ---
+  NARRATIVE.lastIndex = 0;
+  while ((match = NARRATIVE.exec(text)) !== null) {
+    const start = match.index;
+    const end = match.index + match[0].length;
+    const authors = [match[1]];
+    if (match[2]) {
+      authors.push(match[2]);
+    }
+    citations.push({
+      raw: match[0],
+      start: start,
+      end: end,
+      type: "narrative",
+      authors: authors,
+      year: parseInt(match[3], 10),
+      title: "",
+      claim: getClaim(text, start, end) // the rest of the sentence
+    });
+  }
+
+  // --- 3. Reference-list lines: Smith, J. (2021). Title. Venue. ---
   let lineStart = 0; // position of the current line in the whole text
   text.split("\n").forEach(function (line) {
     const thisLineStart = lineStart;
@@ -170,13 +228,29 @@ function extractCitations(text) {
       authors: authors,
       year: parseInt(lineMatch[2], 10),
       title: getTitle(lineMatch[3]),
+      titleAndVenue: lineMatch[3].trim(), // everything after "(year)." – used by the title fallback in lookup.js
       claim: "" // a reference-list line makes no claim to check
     });
   });
 
-  // Return the citations in the order they appear in the text.
+  return removeOverlaps(citations);
+}
+
+/**
+ * Sorts citations into text order and drops any citation that overlaps one
+ * already kept (e.g. if two patterns matched the same piece of text), so
+ * every piece of text is highlighted at most once.
+ */
+function removeOverlaps(citations) {
   citations.sort(function (a, b) { return a.start - b.start; });
-  return citations;
+  const kept = [];
+  citations.forEach(function (citation) {
+    const previous = kept[kept.length - 1];
+    if (!previous || citation.start >= previous.end) {
+      kept.push(citation);
+    }
+  });
+  return kept;
 }
 
 /**
@@ -189,7 +263,7 @@ function parseInTextAuthors(authorsText) {
     .replace(/\bet al\.?/g, "")      // drop "et al."
     .split(/,|&|\band\b/)            // split on commas, "&" and "and"
     .map(function (name) { return name.trim(); })
-    .filter(function (name) { return new RegExp("^" + SURNAME + "$").test(name); });
+    .filter(function (name) { return new RegExp("^" + FULL_SURNAME + "$").test(name); });
 }
 
 /** "Skitka, L. J., Mosier, K. L., & Burdick, M." -> ["Skitka", "Mosier", "Burdick"] */
@@ -210,35 +284,40 @@ function getTitle(rest) {
 }
 
 /**
- * Finds the sentence that contains position `index` in the text and returns
- * it with all bracketed citations removed. That sentence is the "claim"
- * that the citation is supposed to support.
+ * Returns the "claim" a citation is supposed to support: the sentence that
+ * contains the citation (at text[citationStart..citationEnd]), with the
+ * citation itself and any other bracketed citations removed.
+ *   "Bansal et al. (2021) proved that X."  ->  "proved that X."
+ *   "X is true (Smith, 2021)."             ->  "X is true."
  *
  * A sentence boundary is ".", "!" or "?" followed by a space and a capital
- * letter, or a line break. ("et al., 2021" is NOT a boundary because "al."
- * is followed by a comma.)
+ * letter, or a line break. ("et al., 2021" and "et al. (2021)" are NOT
+ * boundaries, because "al." is followed by a comma or a bracket.)
  */
-function getClaimForPosition(text, index) {
+function getClaim(text, citationStart, citationEnd) {
   const boundary = /[.!?]["')\]]?\s+(?=[A-Z])|\n/g;
-  let start = 0;
-  let end = text.length;
+  let sentenceStart = 0;
+  let sentenceEnd = text.length;
   let match;
 
   while ((match = boundary.exec(text)) !== null) {
     const boundaryEnd = match.index + match[0].length;
-    if (boundaryEnd <= index) {
-      start = boundaryEnd;          // this boundary is before the citation
-    } else {
-      end = match.index + 1;        // first boundary after the citation
+    if (boundaryEnd <= citationStart) {
+      sentenceStart = boundaryEnd;      // this boundary is before the citation
+    } else if (match.index >= citationEnd) {
+      sentenceEnd = match.index + 1;    // first boundary after the citation
       break;
     }
   }
 
-  return text
-    .slice(start, end)
-    .replace(/\([^()]*\d{4}[a-z]?\)/g, "") // remove the citations themselves
-    .replace(/\s+/g, " ")                  // collapse repeated spaces
-    .replace(/\s+([.,;:!?])/g, "$1")       // no space before punctuation
+  // The sentence without the citation itself
+  const sentence = text.slice(sentenceStart, citationStart) + " " + text.slice(citationEnd, sentenceEnd);
+
+  return sentence
+    .replace(NARRATIVE_CITATION_TO_REMOVE, "") // remove other narrative citations
+    .replace(BRACKET_CITATION_TO_REMOVE, "") // remove other bracketed citations
+    .replace(/\s+/g, " ")                    // collapse repeated spaces
+    .replace(/\s+([.,;:!?])/g, "$1")         // no space before punctuation
     .trim();
 }
 
