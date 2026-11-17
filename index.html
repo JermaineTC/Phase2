@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Citation Check Editor (Prototype)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top bar: app name + a permanent reminder that the lookup is not real -->
+  <header class="app-header">
+    <h1>Citation Check Editor</h1>
+    <span class="simulated-label">Reference lookup is simulated</span>
+  </header>
+
+  <main class="layout">
+
+    <!-- LEFT: the writing area -->
+    <section class="editor-column">
+      <!--
+        contenteditable div (not a textarea) so that app.js can wrap pasted
+        text in a highlighted <span> and anchor the pop-up next to it.
+      -->
+      <div id="editor"
+           class="editor"
+           contenteditable="true"
+           spellcheck="true"
+           aria-label="Writing editor"
+           data-placeholder="Start writing, or paste some text here..."></div>
+
+      <!-- Status bar: app.js keeps this counter up to date -->
+      <div class="status-bar" aria-live="polite">
+        <span id="unverified-count">0 references unverified</span>
+      </div>
+    </section>
+
+    <!-- RIGHT: a small legend explaining the highlight colours -->
+    <aside class="side-column">
+      <h2>Highlight key</h2>
+      <ul class="legend">
+        <li><span class="swatch flag-unverified"></span> Unverified</li>
+        <li><span class="swatch flag-not-found"></span> Reference not found</li>
+        <li><span class="swatch flag-verified"></span> Verified by you</li>
+        <li><span class="swatch flag-dismissed"></span> Dismissed</li>
+      </ul>
+      <p class="hint">
+        Pasted text that contains citations is highlighted and checked.
+        Click a highlight to reopen its pop-up. Your paste is never blocked.
+      </p>
+    </aside>
+
+  </main>
+
+  <!-- The pop-up (one shared element, filled in and positioned by app.js) -->
+  <div id="popup" class="popup" role="dialog" aria-label="Reference check" hidden></div>
+
+  <!-- Small message at the bottom of the screen used for "Undo" after Dismiss -->
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <!--
+    Plain <script> tags (no ES modules) so the page works when opened
+    directly from disk (file://). ORDER MATTERS: data and helper files
+    first, app.js last because it uses everything defined before it.
+  -->
+</body>
+</html>
