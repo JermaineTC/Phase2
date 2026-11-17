@@ -48,8 +48,31 @@ function handlePaste(event) {
     return;
   }
 
-  // For now every paste is inserted as normal text.
-  insertAtCursor(document.createTextNode(text), false);
+  // Step 1 + 2: find citations and decide whether to flag (detector.js).
+  const citations = extractCitations(text);
+  const risk = riskScore(text, citations);
+
+  // Not worth flagging: paste normally, no highlight, no pop-up.
+  if (!risk.flagged) {
+    insertAtCursor(document.createTextNode(text), false);
+    updateCounter();
+    return;
+  }
+
+  // Remember this paste so the pop-up and counter can use it later.
+  const id = "p" + nextPasteId;
+  nextPasteId++;
+  pastes[id] = {
+    id: id,
+    text: text,
+    citations: citations,
+    risk: risk,
+    status: "unverified",
+    statusBeforeDismiss: null // used by Undo
+  };
+
+  insertFlagSpan(createFlagSpan(id, text));
+  applyStatusClass(id);
   updateCounter();
 }
 
