@@ -72,5 +72,19 @@ const PROMPTS = {
   },
 
   // Text for the Undo message after Dismiss
-  dismissedToast: "Check dismissed."
+  dismissedToast: "Check dismissed.",
+
+  // Short wording for the session history panel
+  history: {
+    status: { "unverified": "Unverified", "verified": "Verified", "dismissed": "Dismissed" },
+    existence: { found: "Found", not_found: "Not found" },
+    support: {
+      supported: "Supported",
+      partial: "Partly supported",
+      not_supported: "Not supported",
+      unknown: "Support unknown"
+    },
+    textDeleted: "text deleted",
+    textGoneMessage: "This citation's text is no longer in the editor (it was deleted or changed)."
+  }
 };

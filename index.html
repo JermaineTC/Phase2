@@ -29,14 +29,31 @@
            aria-label="Writing editor"
            data-placeholder="Start writing, or paste some text here..."></div>
 
-      <!-- Status bar: app.js keeps this counter up to date -->
+      <!-- Status bar: a short summary, kept up to date by app.js -->
       <div class="status-bar" aria-live="polite">
-        <span id="unverified-count">0 references unverified</span>
+        <span id="status-summary">0 unverified · 0 verified · 0 dismissed</span>
       </div>
     </section>
 
-    <!-- RIGHT: a small legend explaining the highlight colours -->
+    <!-- RIGHT: session history + a legend explaining the highlights -->
     <aside class="side-column">
+
+      <!-- Collapsible session history panel (<details> = built-in collapse) -->
+      <details class="history-panel" open>
+        <summary>Session history</summary>
+
+        <!-- Counts, filled in by app.js -->
+        <div class="history-counts">
+          <div class="count-box"><span id="count-unverified" class="count-number">0</span>Unverified</div>
+          <div class="count-box"><span id="count-verified" class="count-number">0</span>Verified</div>
+          <div class="count-box"><span id="count-dismissed" class="count-number">0</span>Dismissed</div>
+        </div>
+
+        <!-- One entry per citation handled this session, filled in by app.js -->
+        <p id="history-empty" class="hint">No citations pasted yet.</p>
+        <ul id="history-list" class="history-list"></ul>
+      </details>
+
       <h2>Highlight key</h2>
       <ul class="legend">
         <li><span class="swatch level-problem"></span> Possible problem (pop-up opens)</li>
@@ -44,13 +61,13 @@
         <li><span class="swatch level-quiet"></span> Not fully checked</li>
       </ul>
       <p class="hint">
-        When you press Verify or Dismiss, the highlight is removed and the
-        citation becomes normal text.
-      </p>
-      <p class="hint">
         Every citation you paste is highlighted and checked. The pop-up only
         opens by itself when there may be a problem; click any highlight to
         see its details. Your paste is never blocked.
+      </p>
+      <p class="hint">
+        When you press Verify or Dismiss, the highlight is removed and the
+        citation becomes normal text.
       </p>
     </aside>
 

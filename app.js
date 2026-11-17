@@ -24,15 +24,22 @@
 // 0. Configuration
 // ---------------------------------------------------------------
 const APP_CONFIG = {
-  undoSeconds: 6, // how long the Undo link stays available after Dismiss
-  popupGap: 8     // pixels between the highlight and the pop-up
+  undoSeconds: 6,     // how long the Undo link stays available after Dismiss
+  messageSeconds: 4,  // how long other short messages stay on screen
+  popupGap: 8,        // pixels between the highlight and the pop-up
+  flashMs: 1500       // how long text "flashes" when jumped to from the history
 };
 
 // ---------------------------------------------------------------
 // 1. Page elements we need to work with
 // ---------------------------------------------------------------
 const editor = document.getElementById("editor");
-const counterEl = document.getElementById("unverified-count");
+const summaryEl = document.getElementById("status-summary");
+const countUnverifiedEl = document.getElementById("count-unverified");
+const countVerifiedEl = document.getElementById("count-verified");
+const countDismissedEl = document.getElementById("count-dismissed");
+const historyList = document.getElementById("history-list");
+const historyEmpty = document.getElementById("history-empty");
 const popup = document.getElementById("popup");
 const toast = document.getElementById("toast");
 
@@ -40,15 +47,17 @@ const toast = document.getElementById("toast");
 // 2. Application state
 // ---------------------------------------------------------------
 
-// Every citation found this session, in the order it was pasted.
-// Each entry is the citation object from extractCitations() with the
-// check results and an id ("c1", "c2", ...) added to it.
+// The session history: every citation found this session, in the order it
+// was pasted. Each entry is the citation object from extractCitations()
+// with the check results, an id ("c1", "c2", ...), status and time added.
+// It only lives in memory, so it is lost when the page is reloaded.
+// PLANNED: persist history and document across reloads
 const records = [];
 let nextRecordId = 1;
 let nextPasteId = 1;
 
 let openRecordId = null;  // id of the citation whose pop-up is open (null = closed)
-let undoTimer = null;     // timer that hides the Undo message
+let toastTimer = null;    // timer that hides the message at the bottom of the screen
 
 /** Finds a citation record by its id (or null). */
 function getRecord(id) {
@@ -83,7 +92,7 @@ function handlePaste(event) {
   // No citations: paste normally, no highlight, no pop-up.
   if (citations.length === 0) {
     insertAtCursor(document.createTextNode(text), false);
-    updateCounter();
+    refreshStatus();
     return;
   }
 
@@ -109,7 +118,7 @@ function handlePaste(event) {
   });
 
   insertAtCursor(buildPasteFragment(text, citations), true);
-  updateCounter();
+  refreshStatus();
 
   // Selective interruption: only open the pop-up automatically if a
   // citation in this paste is a "problem". If there are several, the
@@ -245,7 +254,7 @@ function isInEditor(id) {
 /** Changes a citation's status and refreshes the counter. */
 function setStatus(id, newStatus) {
   getRecord(id).status = newStatus;
-  updateCounter();
+  refreshStatus();
 }
 
 /**
@@ -290,22 +299,40 @@ function rewrapHighlight(id) {
 }
 
 /**
- * Counts the citations that are still unverified (any level) and still in
- * the editor, and shows the number in the status bar. "Likely supported"
- * citations count too: only the student's Verify makes a citation verified.
+ * Recounts Unverified / Verified / Dismissed, updates the status-bar
+ * summary and redraws the history list. Called after every change.
+ *
+ * Unverified = unverified citations whose text is still in the editor
+ * (any level – "likely supported" counts too, because only the student's
+ * Verify makes a citation verified). If the student deletes an unverified
+ * citation, it stays in the history marked "text deleted" but is no longer
+ * counted.
  */
-function updateCounter() {
-  let count = 0;
+function refreshStatus() {
+  let unverified = 0;
+  let verified = 0;
+  let dismissed = 0;
+
   records.forEach(function (record) {
     if (record.status === "unverified" && isInEditor(record.id)) {
-      count++;
+      unverified++;
+    } else if (record.status === "verified") {
+      verified++;
+    } else if (record.status === "dismissed") {
+      dismissed++;
     }
   });
-  counterEl.textContent = count + (count === 1 ? " reference" : " references") + " unverified";
+
+  countUnverifiedEl.textContent = unverified;
+  countVerifiedEl.textContent = verified;
+  countDismissedEl.textContent = dismissed;
+  summaryEl.textContent = unverified + " unverified · " + verified + " verified · " + dismissed + " dismissed";
+
+  renderHistory();
 }
 
-// Typing or deleting can remove highlighted text, so recount on every edit.
-editor.addEventListener("input", updateCounter);
+// Typing or deleting can remove highlighted text, so refresh on every edit.
+editor.addEventListener("input", refreshStatus);
 
 // ---------------------------------------------------------------
 // 5. Pop-up: rendering
@@ -536,6 +563,7 @@ function dismissRecord(id) {
 /** Undo a dismiss: restore the highlight (same level) and the previous status. */
 function undoDismiss(id) {
   const record = getRecord(id);
+  hideToast();
   if (record && record.status === "dismissed") {
     if (rewrapHighlight(id)) {
       setStatus(id, record.statusBeforeDismiss || "unverified");
@@ -543,14 +571,13 @@ function undoDismiss(id) {
     } else {
       // The text was edited or deleted in the meantime, so there is
       // nothing to put the highlight back on. It stays dismissed.
-      console.log("[undo] could not restore highlight for " + id + ": text changed");
+      showMessage(PROMPTS.history.textGoneMessage);
     }
   }
-  hideToast();
 }
 
 function showUndoToast(id) {
-  clearTimeout(undoTimer); // only one Undo message at a time
+  clearTimeout(toastTimer); // only one Undo message at a time
 
   toast.innerHTML = escapeHtml(PROMPTS.dismissedToast) +
                     ' <button class="toast-undo" type="button">Undo</button>';
@@ -559,17 +586,150 @@ function showUndoToast(id) {
   });
   toast.hidden = false;
 
-  undoTimer = setTimeout(hideToast, APP_CONFIG.undoSeconds * 1000);
+  toastTimer = setTimeout(hideToast, APP_CONFIG.undoSeconds * 1000);
+}
+
+/** Shows a short message (no buttons) at the bottom of the screen. */
+function showMessage(text) {
+  clearTimeout(toastTimer);
+  toast.textContent = text;
+  toast.hidden = false;
+  toastTimer = setTimeout(hideToast, APP_CONFIG.messageSeconds * 1000);
 }
 
 function hideToast() {
-  clearTimeout(undoTimer);
+  clearTimeout(toastTimer);
   toast.hidden = true;
   toast.innerHTML = "";
 }
 
 // ---------------------------------------------------------------
-// 8. Simple interaction log (for your own testing / evaluation)
+// 8. Session history panel
+// ---------------------------------------------------------------
+
+/** Formats a Date as e.g. "14:05:32". */
+function formatTime(date) {
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+/**
+ * Redraws the history list from the records array (newest first).
+ * Each entry shows: citation text, status, lookup result, support result,
+ * interruption level and the time it was pasted.
+ */
+function renderHistory() {
+  historyEmpty.hidden = records.length > 0;
+
+  let html = "";
+  for (let i = records.length - 1; i >= 0; i--) {
+    const record = records[i];
+    const h = PROMPTS.history;
+
+    let statusText = h.status[record.status];
+    if (record.status === "unverified" && !isInEditor(record.id)) {
+      statusText += " (" + h.textDeleted + ")";
+    }
+
+    // Each entry is a <button> so it can be clicked or used with the keyboard.
+    html += '<li><button type="button" class="history-item history-' + record.status + '" data-id="' + record.id + '">';
+    html += '<span class="history-raw">' + escapeHtml(record.raw) + "</span>";
+    html += '<span class="history-meta">' +
+            "<strong>" + escapeHtml(statusText) + "</strong>" +
+            " · " + escapeHtml(h.existence[record.existence]) +
+            " · " + escapeHtml(h.support[record.support]) +
+            " · " + escapeHtml(PROMPTS.levels[record.level].name) +
+            " · " + formatTime(record.time) +
+            "</span>";
+    html += "</button></li>";
+  }
+  historyList.innerHTML = html;
+}
+
+// Clicking a history entry jumps to that citation in the editor.
+historyList.addEventListener("click", function (event) {
+  const item = event.target.closest(".history-item");
+  if (item) {
+    goToRecord(item.dataset.id);
+  }
+});
+
+/**
+ * Scrolls to a citation's text in the editor and flashes it briefly.
+ * For unverified citations, the pop-up is opened as well.
+ * If the text is no longer in the editor, a message says so.
+ */
+function goToRecord(id) {
+  const record = getRecord(id);
+  const range = getRangeForRecord(record);
+  if (!range) {
+    showMessage(PROMPTS.history.textGoneMessage);
+    return;
+  }
+
+  // Scroll the text into the middle of the window (instant, so that the
+  // position we measure for the flash is the final one).
+  const element = range.startContainer.nodeType === Node.TEXT_NODE
+    ? range.startContainer.parentElement
+    : range.startContainer;
+  element.scrollIntoView({ block: "center" });
+
+  flashRange(range);
+  if (record.status === "unverified") {
+    openPopup(id);
+  }
+}
+
+/**
+ * Returns a Range covering the citation's text in the editor, or null.
+ *   - Unverified: the text is inside its highlight span(s).
+ *   - Verified/dismissed: the highlight was unwrapped, so we use the text
+ *     node saved by unwrapHighlight(), if it is still in the editor and
+ *     still contains the citation text.
+ */
+function getRangeForRecord(record) {
+  const range = document.createRange();
+
+  const spans = getSpansForRecord(record.id);
+  if (spans.length > 0) {
+    range.setStartBefore(spans[0]);
+    range.setEndAfter(spans[spans.length - 1]);
+    return range;
+  }
+
+  if (record.unwrapped && record.unwrapped.length > 0) {
+    const pair = record.unwrapped[0];
+    const originalText = pair.span.textContent;
+    const position = pair.textNode.data.indexOf(originalText);
+    if (editor.contains(pair.textNode) && position !== -1) {
+      range.setStart(pair.textNode, position);
+      range.setEnd(pair.textNode, position + originalText.length);
+      return range;
+    }
+  }
+  return null; // deleted or changed
+}
+
+/**
+ * Briefly draws a coloured box over a piece of text. The box is a separate
+ * element on top of the page, so the editor's text is never changed.
+ */
+function flashRange(range) {
+  const rect = range.getBoundingClientRect();
+  const box = document.createElement("div");
+  box.className = "flash-box";
+  box.style.top = (rect.top + window.scrollY - 2) + "px";
+  box.style.left = (rect.left + window.scrollX - 2) + "px";
+  box.style.width = (rect.width + 4) + "px";
+  box.style.height = (rect.height + 4) + "px";
+  document.body.appendChild(box);
+  setTimeout(function () { box.remove(); }, APP_CONFIG.flashMs);
+}
+
+// Draw the (empty) history once when the page loads.
+refreshStatus();
+
+// ---------------------------------------------------------------
+// 9. Simple interaction log (for your own testing / evaluation)
 // ---------------------------------------------------------------
 // Every action is printed to the browser console (F12 -> Console) and kept in
 // the eventLog array. Type eventLog in the console to see all events so far.
