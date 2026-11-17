@@ -153,3 +153,32 @@ body {
 .hint {
   color: var(--muted);
 }
+
+/* ---------- Highlighted (flagged) pastes ---------- */
+/* Every flagged paste is a <span class="paste-flag flag-<status>"> */
+.paste-flag {
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 1px 0;
+  border-bottom: 2px solid transparent;
+}
+
+.flag-unverified {
+  background: var(--unverified-bg);
+  border-bottom-color: var(--unverified-line);
+}
+
+.flag-not-found {
+  background: var(--not-found-bg);
+  border-bottom-color: var(--not-found-line);
+}
+
+.flag-verified {
+  background: var(--verified-bg);
+  border-bottom-color: var(--verified-line);
+}
+
+.flag-dismissed {
+  background: var(--dismissed-bg);
+  border-bottom-color: var(--dismissed-line);
+}
