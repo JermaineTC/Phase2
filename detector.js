@@ -1,10 +1,11 @@
 /*
- * detector.js – finds citations in pasted text and decides whether
- * the paste is worth flagging.
+ * detector.js – finds citations in pasted text, scores each one and
+ * decides how strongly to interrupt the student.
  *
  * Public functions (used by app.js):
- *   extractCitations(text)        -> array of citation objects
- *   riskScore(text, citations)    -> { score, threshold, flagged, reasons }
+ *   extractCitations(text)                          -> array of citation objects
+ *   riskScore(citation, pasteText, citationCount)   -> { score, threshold, reasons }
+ *   decideInterruptionLevel(citation, risk)         -> "problem" | "likely-supported" | "quiet"
  *
  * A citation object looks like:
  *   {
@@ -21,30 +22,45 @@
 
 // ---------------------------------------------------------------
 // Risk score configuration – ALL weights and the threshold live here.
-// TODO(me): tune weights and justify in rationale
+// The score is calculated PER CITATION, after the (simulated) lookup and
+// support check, so it scores the RESULTS rather than just "has a citation".
 // ---------------------------------------------------------------
 const DETECTOR_CONFIG = {
+  // TODO(me): tune
   weights: {
-    // The paste contains at least one citation. This is the core signal:
-    // the system is about verifying references, so text without any
-    // citations has nothing to check.
-    containsCitation: 3,
+    // The reference was not found in the local list: it may be made up.
+    notFound: 3,
 
-    // More than one citation: the paste leans on several sources, so
-    // there are more chances that one of them is wrong or made up.
+    // The reference was found, but its stored quote does not match the claim.
+    notSupported: 3,
+
+    // The stored quote matches only part of the claim (possible overstatement).
+    partial: 2,
+
+    // A year before earliestYear or after the current year is unusual for
+    // this topic and a typical sign of a fabricated reference.
+    implausibleYear: 2,
+
+    // The paste contains more than one citation: it leans on several
+    // sources, so there are more chances that one of them is wrong.
     multipleCitations: 1,
 
-    // A long paste (over longPasteChars characters) is more likely to be
-    // a generated block of text than a short quote the student chose.
+    // A long paste (over longPasteChars characters) is more likely to be a
+    // generated block of text than a short quote the student chose.
     longPaste: 1,
 
-    // A citation year before earliestYear or after the current year is
-    // unusual for this topic and a typical sign of a fabricated reference.
-    implausibleYear: 2
+    // Found and the quote matches: no extra risk.
+    foundAndSupported: 0,
+
+    // Found, but support could not be checked (e.g. no keyQuote stored):
+    // no extra risk, but it does NOT count as supported either.
+    supportUnknown: 0
   },
   longPasteChars: 300,
   earliestYear: 1950,
-  threshold: 3 // flag the paste if score >= threshold
+
+  // score >= threshold -> "problem" level: the pop-up opens automatically
+  threshold: 3
 };
 
 // A surname: starts with a capital letter (accents allowed, e.g. "Buçinca"),
@@ -231,43 +247,83 @@ function getClaimForPosition(text, index) {
 // ---------------------------------------------------------------
 
 /**
- * Adds up simple signals to decide whether a paste should be flagged.
- * Returns the score, the threshold, whether it was flagged, and a list
- * of human-readable reasons (shown in the pop-up for transparency).
+ * Scores ONE citation from its lookup and support results plus two
+ * signals about the paste it came from.
+ * Must be called AFTER lookupReference() and checkSupport(), because it
+ * reads citation.existence and citation.support.
+ *
+ *   citation       – a citation object with .existence, .support and .year
+ *   pasteText      – the whole pasted text (for the long-paste signal)
+ *   citationCount  – how many citations were in the same paste
+ *
+ * Returns { score, threshold, reasons } where reasons lists every signal
+ * that fired (shown under "Why was this flagged?" in the pop-up).
  */
-function riskScore(text, citations) {
+function riskScore(citation, pasteText, citationCount) {
   const weights = DETECTOR_CONFIG.weights;
   const currentYear = new Date().getFullYear();
   let score = 0;
   const reasons = [];
 
-  if (citations.length > 0) {
-    score += weights.containsCitation;
-    reasons.push("Contains a citation (+" + weights.containsCitation + ")");
+  // Small helper: add points and remember why.
+  function addSignal(points, description) {
+    score += points;
+    reasons.push(description + " (+" + points + ")");
   }
 
-  if (citations.length > 1) {
-    score += weights.multipleCitations;
-    reasons.push("More than one citation (+" + weights.multipleCitations + ")");
+  // Result of the existence check
+  if (citation.existence === "not_found") {
+    addSignal(weights.notFound, "Reference not found in the local list");
   }
 
-  if (text.length > DETECTOR_CONFIG.longPasteChars) {
-    score += weights.longPaste;
-    reasons.push("Long paste, over " + DETECTOR_CONFIG.longPasteChars + " characters (+" + weights.longPaste + ")");
+  // Result of the support check (only meaningful if the reference was found)
+  if (citation.existence === "found") {
+    if (citation.support === "not_supported") {
+      addSignal(weights.notSupported, "Stored quote does not match the claim");
+    } else if (citation.support === "partial") {
+      addSignal(weights.partial, "Stored quote only partly matches the claim");
+    } else if (citation.support === "supported") {
+      addSignal(weights.foundAndSupported, "Found and the stored quote matches the claim");
+    } else {
+      addSignal(weights.supportUnknown, "Found, but support could not be checked");
+    }
   }
 
-  const hasImplausibleYear = citations.some(function (citation) {
-    return citation.year < DETECTOR_CONFIG.earliestYear || citation.year > currentYear;
-  });
-  if (hasImplausibleYear) {
-    score += weights.implausibleYear;
-    reasons.push("Year outside " + DETECTOR_CONFIG.earliestYear + "–" + currentYear + " (+" + weights.implausibleYear + ")");
+  // Implausible year
+  if (citation.year < DETECTOR_CONFIG.earliestYear || citation.year > currentYear) {
+    addSignal(weights.implausibleYear, "Year outside " + DETECTOR_CONFIG.earliestYear + "–" + currentYear);
+  }
+
+  // Signals about the whole paste
+  if (citationCount > 1) {
+    addSignal(weights.multipleCitations, "More than one citation in this paste");
+  }
+  if (pasteText.length > DETECTOR_CONFIG.longPasteChars) {
+    addSignal(weights.longPaste, "Long paste, over " + DETECTOR_CONFIG.longPasteChars + " characters");
   }
 
   return {
     score: score,
     threshold: DETECTOR_CONFIG.threshold,
-    flagged: score >= DETECTOR_CONFIG.threshold,
     reasons: reasons
   };
+}
+
+/**
+ * Decides how strongly to interrupt the student for one citation:
+ *   "problem"          – score >= threshold: strong highlight, pop-up opens automatically
+ *   "likely-supported" – below threshold AND found AND supported: soft green underline, no pop-up
+ *   "quiet"            – anything else below threshold (e.g. support unknown):
+ *                        subtle underline, pop-up only if clicked
+ * In all three cases the citation still counts as unverified until the
+ * student presses Verify.
+ */
+function decideInterruptionLevel(citation, risk) {
+  if (risk.score >= risk.threshold) {
+    return "problem";
+  }
+  if (citation.existence === "found" && citation.support === "supported") {
+    return "likely-supported";
+  }
+  return "quiet";
 }

@@ -4,20 +4,16 @@
  *
  * TODO(me): refine wording
  *
- * "label"    = short result line shown for each citation
+ * "label"    = short result line shown for the citation
  * "question" = prompting question shown under the citation ("" = none)
  */
 const PROMPTS = {
-  title: "Check the references in this paste",
+  title: "Check this reference",
 
   // Shown at the top of every pop-up so the student knows the check is not real.
   simulatedNote:
     "Simulated check: references are compared with a small local list, not a live database. " +
     "\"Not found\" does not prove a reference is fake, and \"found\" does not prove it is correct.",
-
-  // Shown when a paste was flagged but no citations were detected
-  // (only possible if the risk weights in detector.js are changed).
-  noCitations: "No citations were detected, but this paste was flagged by other signals.",
 
   // Result of lookupReference()
   existence: {
@@ -51,10 +47,26 @@ const PROMPTS = {
     }
   },
 
-  // Human-readable names for each paste status
+  // Interruption levels (see decideInterruptionLevel in detector.js).
+  // "name" is shown in the pop-up, "tooltip" when hovering the highlight.
+  levels: {
+    "problem": {
+      name: "Possible problem",
+      tooltip: "Possible problem with this reference – click for details"
+    },
+    "likely-supported": {
+      name: "Likely supported",
+      tooltip: "Likely supported – not yet verified by you"
+    },
+    "quiet": {
+      name: "Not fully checked",
+      tooltip: "Not fully checked – click for details"
+    }
+  },
+
+  // Human-readable names for each citation status
   status: {
-    "unverified": "Not yet verified",
-    "not-found": "Not yet verified – a reference was not found",
+    "unverified": "Not yet verified by you",
     "verified": "You marked this as verified",
     "dismissed": "You dismissed this check"
   },

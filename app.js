@@ -1,20 +1,30 @@
 /*
  * app.js – the main controller of the editor.
  *
- * Responsibilities:
- *   1. Intercept paste events and insert the text as PLAIN text.
- *   2. Wrap "flagged" pastes in a highlighted <span class="paste-flag">.
- *   3. Keep each flagged paste's status and the "N references unverified" counter.
+ * What happens on paste (for EACH citation found):
+ *   1. extractCitations()         detector.js – find citations
+ *   2. lookupReference()          lookup.js   – does the reference exist? (simulated)
+ *   3. checkSupport()             lookup.js   – does its quote match the claim?
+ *   4. riskScore()                detector.js – score the results
+ *   5. decideInterruptionLevel()  detector.js – "problem" / "likely-supported" / "quiet"
+ * Each citation is then wrapped in its own highlight:
+ *   <span class="paste-flag level-<level> status-<status>" data-id="c1">
+ * The pop-up opens automatically ONLY for "problem" citations; the
+ * others open their pop-up when clicked.
  *
- * Status values used for a flagged paste (each maps to a CSS class "flag-<status>"):
- *   "unverified" – flagged, the student has not acted on it yet
- *   "verified"   – the student pressed Verify
- *   "not-found"  – at least one reference was not found (still unverified)
- *   "dismissed"  – the student pressed Dismiss
+ * Status of each citation: "unverified" | "verified" | "dismissed".
  *
  * This file is loaded LAST in index.html, because it uses functions and
  * objects defined in the other script files.
  */
+
+// ---------------------------------------------------------------
+// 0. Configuration
+// ---------------------------------------------------------------
+const APP_CONFIG = {
+  undoSeconds: 6, // how long the Undo link stays available after Dismiss
+  popupGap: 8     // pixels between the highlight and the pop-up
+};
 
 // ---------------------------------------------------------------
 // 1. Page elements we need to work with
@@ -28,15 +38,25 @@ const toast = document.getElementById("toast");
 // 2. Application state
 // ---------------------------------------------------------------
 
-// Every flagged paste is stored here, keyed by its id ("p1", "p2", ...).
-// The <span> in the editor only stores the id (data-id); all other
-// information lives in this object.
-const pastes = {};
+// Every citation found this session, in the order it was pasted.
+// Each entry is the citation object from extractCitations() with the
+// check results and an id ("c1", "c2", ...) added to it.
+const records = [];
+let nextRecordId = 1;
 let nextPasteId = 1;
 
-let openPasteId = null;   // id of the paste whose pop-up is open (null = closed)
+let openRecordId = null;  // id of the citation whose pop-up is open (null = closed)
 let undoTimer = null;     // timer that hides the Undo message
-const UNDO_SECONDS = 6;   // how long the Undo link stays available
+
+/** Finds a citation record by its id (or null). */
+function getRecord(id) {
+  for (let i = 0; i < records.length; i++) {
+    if (records[i].id === id) {
+      return records[i];
+    }
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------
 // 3. Paste handling
@@ -53,53 +73,105 @@ function handlePaste(event) {
   if (!text) {
     return;
   }
+  closePopup(); // a new paste replaces any pop-up that was open
 
-  // Step 1 + 2: find citations and decide whether to flag (detector.js).
+  // Step 1: find citations.
   const citations = extractCitations(text);
-  const risk = riskScore(text, citations);
 
-  // Not worth flagging: paste normally, no highlight, no pop-up.
-  if (!risk.flagged) {
-    closePopup(); // close any pop-up left open from an earlier paste
+  // No citations: paste normally, no highlight, no pop-up.
+  if (citations.length === 0) {
     insertAtCursor(document.createTextNode(text), false);
     updateCounter();
     return;
   }
 
-  // Step 3 + 4: SIMULATED existence and support checks (lookup.js).
-  // The results are stored on each citation object.
+  // Steps 2–5 for every citation. The results are stored on the citation
+  // object itself, which then becomes this session's record of it.
+  const pasteId = "p" + nextPasteId;
+  nextPasteId++;
+  const pastedAt = new Date();
+
   citations.forEach(function (citation) {
-    citation.existence = lookupReference(citation);    // "found" / "not_found"
-    citation.reference = findReference(citation);      // matched entry or null
+    citation.existence = lookupReference(citation);   // "found" / "not_found"
+    citation.reference = findReference(citation);     // matched entry or null
     citation.support = checkSupport(citation.claim, citation.reference);
+    citation.risk = riskScore(citation, text, citations.length);
+    citation.level = decideInterruptionLevel(citation, citation.risk);
+
+    citation.id = "c" + nextRecordId;
+    nextRecordId++;
+    citation.pasteId = pasteId;
+    citation.status = "unverified";
+    citation.time = pastedAt;
+    records.push(citation);
   });
 
-  // Remember this paste so the pop-up and counter can use it later.
-  const id = "p" + nextPasteId;
-  nextPasteId++;
-  pastes[id] = {
-    id: id,
-    text: text,
-    citations: citations,
-    risk: risk,
-    status: getInitialStatus(citations),
-    statusBeforeDismiss: null // used by Undo
-  };
-
-  insertFlagSpan(createFlagSpan(id, text));
-  applyStatusClass(id);
+  insertAtCursor(buildPasteFragment(text, citations), true);
   updateCounter();
 
-  // Step 5: show the pop-up next to the pasted text.
-  openPopup(id);
+  // Selective interruption: only open the pop-up automatically if a
+  // citation in this paste is a "problem". If there are several, the
+  // first one opens; the others stay strongly highlighted.
+  for (let i = 0; i < citations.length; i++) {
+    if (citations[i].level === "problem") {
+      openPopup(citations[i].id);
+      break;
+    }
+  }
 }
 
 /**
- * Inserts a DOM node (text node or <span>) where the cursor is.
+ * Builds the pasted text as a DocumentFragment (a group of nodes that can
+ * be inserted in one go): plain text nodes for the text BETWEEN citations
+ * and a highlight <span> for each citation.
+ * Uses the start/end positions that extractCitations() worked out.
+ */
+function buildPasteFragment(text, citations) {
+  const fragment = document.createDocumentFragment();
+  let position = 0;
+
+  citations.forEach(function (citation) {
+    if (citation.start > position) {
+      fragment.appendChild(document.createTextNode(text.slice(position, citation.start)));
+    }
+    fragment.appendChild(createCitationSpan(citation));
+    position = citation.end;
+  });
+
+  if (position < text.length) {
+    fragment.appendChild(document.createTextNode(text.slice(position)));
+  }
+
+  // If the paste ends with a highlight, add a zero-width space after it.
+  // Why? Browsers (especially Chrome) tend to put the cursor back INSIDE
+  // the span, so anything typed next would join the highlight.
+  if (fragment.lastChild && fragment.lastChild.nodeType === Node.ELEMENT_NODE) {
+    fragment.appendChild(document.createTextNode("​"));
+  }
+  return fragment;
+}
+
+/** Creates the highlight <span> for one citation. */
+function createCitationSpan(record) {
+  const span = document.createElement("span");
+  span.dataset.id = record.id;                         // becomes data-id="c1"
+  span.title = PROMPTS.levels[record.level].tooltip;   // hover text
+  span.textContent = record.raw;                       // textContent = safe, never parsed as HTML
+  span.className = getSpanClass(record);
+  return span;
+}
+
+/** CSS classes for a citation's highlight, based on its level and status. */
+function getSpanClass(record) {
+  return "paste-flag level-" + record.level + " status-" + record.status;
+}
+
+/**
+ * Inserts a DOM node (text node, <span> or fragment) where the cursor is.
  * If some text is selected, it is replaced (like a normal paste).
  *
- * avoidNesting: when true and the cursor is inside an existing flagged span,
- * the node is inserted AFTER that span so highlights are never nested.
+ * avoidNesting: when true and the cursor is inside an existing highlight,
+ * the node is inserted AFTER that highlight so highlights are never nested.
  */
 function insertAtCursor(node, avoidNesting) {
   const selection = window.getSelection();
@@ -123,106 +195,69 @@ function insertAtCursor(node, avoidNesting) {
     }
   }
 
+  // A fragment empties itself when inserted, so remember its last node first.
+  const lastNode = node.nodeType === Node.DOCUMENT_FRAGMENT_NODE ? node.lastChild : node;
   range.insertNode(node);
 
   // Move the cursor to just after what we inserted.
-  range.setStartAfter(node);
+  range.setStartAfter(lastNode);
   range.collapse(true);
   selection.removeAllRanges();
   selection.addRange(range);
 }
 
 /**
- * Creates the highlighted <span> for a flagged paste.
- * The CSS class "flag-<status>" is added later by applyStatusClass().
- */
-function createFlagSpan(id, text) {
-  const span = document.createElement("span");
-  span.className = "paste-flag";
-  span.dataset.id = id;        // becomes the attribute data-id="p1"
-  span.textContent = text;     // textContent = safe, never parsed as HTML
-  return span;
-}
-
-/**
- * Inserts a flagged span, then a zero-width space after it.
- * Why the zero-width space? Browsers (especially Chrome) tend to put
- * the cursor back INSIDE the span after an insert, so anything the
- * student types next would join the highlight. Having an invisible
- * character after the span gives the cursor somewhere to sit outside it.
- */
-function insertFlagSpan(span) {
-  insertAtCursor(span, true);
-  insertAtCursor(document.createTextNode("​"), false);
-}
-
-/**
- * Walks up from any node to the flagged span that contains it (or null).
+ * Walks up from any node to the highlight span that contains it (or null).
  */
 function findFlagSpan(node) {
+  if (!node) {
+    return null;
+  }
   // Text nodes have no .closest(), so start from their parent element.
   const element = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
   return element ? element.closest(".paste-flag") : null;
 }
 
 /**
- * Returns all spans in the editor that belong to one paste.
+ * Returns all spans in the editor that belong to one citation.
  * (Usually one, but the browser can split a span in two, e.g. when
  * the student presses Enter in the middle of it.)
  */
-function getSpansForPaste(id) {
+function getSpansForRecord(id) {
   return editor.querySelectorAll('.paste-flag[data-id="' + id + '"]');
+}
+
+/** True if the citation's highlighted text is still in the editor. */
+function isInEditor(id) {
+  return getSpansForRecord(id).length > 0;
 }
 
 // ---------------------------------------------------------------
 // 4. Status and counter
 // ---------------------------------------------------------------
 
-/** A paste starts as "not-found" if any of its references was not found. */
-function getInitialStatus(citations) {
-  const anyNotFound = citations.some(function (citation) {
-    return citation.existence === "not_found";
-  });
-  return anyNotFound ? "not-found" : "unverified";
-}
-
-/** Changes a paste's status and refreshes its colour and the counter. */
+/** Changes a citation's status and refreshes its highlight and the counter. */
 function setStatus(id, newStatus) {
-  pastes[id].status = newStatus;
-  applyStatusClass(id);
+  const record = getRecord(id);
+  record.status = newStatus;
+  getSpansForRecord(id).forEach(function (span) {
+    span.className = getSpanClass(record);
+  });
   updateCounter();
 }
 
-/** Makes the span's CSS class match the paste's current status. */
-function applyStatusClass(id) {
-  const status = pastes[id].status;
-  getSpansForPaste(id).forEach(function (span) {
-    span.className = "paste-flag flag-" + status;
-  });
-}
-
 /**
- * Counts the references in flagged pastes that are still unverified
- * ("unverified" or "not-found") and shows the number in the status bar.
- * We count from the spans that are actually in the editor, so if the
- * student deletes a highlighted paste it no longer counts.
+ * Counts the citations that are still unverified (any level) and still in
+ * the editor, and shows the number in the status bar. "Likely supported"
+ * citations count too: only the student's Verify makes a citation verified.
  */
 function updateCounter() {
-  const countedIds = {}; // so a split span is only counted once
   let count = 0;
-
-  editor.querySelectorAll(".paste-flag").forEach(function (span) {
-    const paste = pastes[span.dataset.id];
-    if (!paste || countedIds[paste.id]) {
-      return;
-    }
-    countedIds[paste.id] = true;
-
-    if (paste.status === "unverified" || paste.status === "not-found") {
-      count += paste.citations.length;
+  records.forEach(function (record) {
+    if (record.status === "unverified" && isInEditor(record.id)) {
+      count++;
     }
   });
-
   counterEl.textContent = count + (count === 1 ? " reference" : " references") + " unverified";
 }
 
@@ -250,80 +285,66 @@ function escapeHtml(text) {
  * a missing reference is the more serious problem, so it comes first;
  * otherwise use the question for the support result (may be "").
  */
-function getQuestion(citation) {
-  if (citation.existence === "not_found") {
+function getQuestion(record) {
+  if (record.existence === "not_found") {
     return PROMPTS.existence.not_found.question;
   }
-  return PROMPTS.support[citation.support].question;
+  return PROMPTS.support[record.support].question;
 }
 
-/** Builds the HTML for one citation inside the pop-up. */
-function renderCitation(citation) {
-  let html = '<li class="citation">';
-  html += '<div class="citation-raw">' + escapeHtml(citation.raw) + "</div>";
-
-  // Existence result
-  const existenceClass = citation.existence === "found" ? "result-ok" : "result-bad";
-  html += '<div class="result ' + existenceClass + '">' +
-          escapeHtml(PROMPTS.existence[citation.existence].label) + "</div>";
-
-  // If found, show which local entry it matched so the student can check it
-  if (citation.reference) {
-    html += '<div class="matched-ref">Matched: <em>' + escapeHtml(citation.reference.title) +
-            "</em> (" + escapeHtml(citation.reference.venue) + ")</div>";
-  }
-
-  // Support result (only meaningful when the reference was found)
-  if (citation.existence === "found") {
-    html += '<div class="result result-' + citation.support + '">' +
-            escapeHtml(PROMPTS.support[citation.support].label) + "</div>";
-  }
-
-  // Prompting question, if any
-  const question = getQuestion(citation);
-  if (question) {
-    html += '<p class="question">' + escapeHtml(question) + "</p>";
-  }
-
-  html += "</li>";
-  return html;
-}
-
-/** Builds the complete pop-up HTML for a paste. */
-function renderPopup(paste) {
+/** Builds the complete pop-up HTML for one citation. */
+function renderPopup(record) {
   let html = "";
 
   html += '<div class="popup-header">';
   html += "<strong>" + escapeHtml(PROMPTS.title) + "</strong>";
-  html += '<button class="popup-close" data-action="close" aria-label="Close">&times;</button>';
+  html += '<button type="button" class="popup-close" data-action="close" aria-label="Close">&times;</button>';
   html += "</div>";
 
   html += '<p class="popup-note">' + escapeHtml(PROMPTS.simulatedNote) + "</p>";
-  html += '<p class="popup-status">Status: ' + escapeHtml(PROMPTS.status[paste.status]) + "</p>";
+  html += '<p class="popup-status">' +
+          '<span class="level-badge badge-' + record.level + '">' + escapeHtml(PROMPTS.levels[record.level].name) + "</span> " +
+          escapeHtml(PROMPTS.status[record.status]) + "</p>";
 
-  // One list item per detected citation
-  if (paste.citations.length === 0) {
-    html += "<p>" + escapeHtml(PROMPTS.noCitations) + "</p>";
-  } else {
-    html += '<ul class="citation-list">';
-    paste.citations.forEach(function (citation) {
-      html += renderCitation(citation);
-    });
-    html += "</ul>";
+  // The citation and its results
+  html += '<div class="citation-raw">' + escapeHtml(record.raw) + "</div>";
+
+  const existenceClass = record.existence === "found" ? "result-ok" : "result-bad";
+  html += '<div class="result ' + existenceClass + '">' +
+          escapeHtml(PROMPTS.existence[record.existence].label) + "</div>";
+
+  // If found, show which local entry it matched so the student can check it
+  if (record.reference) {
+    html += '<div class="matched-ref">Matched: <em>' + escapeHtml(record.reference.title) +
+            "</em> (" + escapeHtml(record.reference.venue) + ")</div>";
   }
 
-  // Transparency: show why the paste was flagged (the risk score signals)
+  // Support result (only meaningful when the reference was found)
+  if (record.existence === "found") {
+    html += '<div class="result result-' + record.support + '">' +
+            escapeHtml(PROMPTS.support[record.support].label) + "</div>";
+  }
+
+  // Prompting question, if any
+  const question = getQuestion(record);
+  if (question) {
+    html += '<p class="question">' + escapeHtml(question) + "</p>";
+  }
+
+  // Transparency: every signal that fired, and the total score.
+  // Shown for all three levels.
   html += '<details class="why-flagged"><summary>Why was this flagged?</summary><ul>';
-  paste.risk.reasons.forEach(function (reason) {
+  record.risk.reasons.forEach(function (reason) {
     html += "<li>" + escapeHtml(reason) + "</li>";
   });
-  html += "<li>Score " + paste.risk.score + " (flag at " + paste.risk.threshold + " or more)</li>";
+  html += "<li><strong>Total score " + record.risk.score + "</strong> " +
+          "(the pop-up opens automatically at " + record.risk.threshold + " or more)</li>";
   html += "</ul></details>";
 
-  // Actions: the student decides; nothing is blocked
+  // Actions – the student decides; nothing is blocked
   html += '<div class="popup-actions">';
-  html += '<button type="button" data-action="verify" class="btn btn-primary" title="I have checked the source(s) myself">Verify</button>';
-  html += '<button type="button" data-action="edit" class="btn" title="Close this and edit the pasted text">Edit</button>';
+  html += '<button type="button" data-action="verify" class="btn btn-primary" title="I have checked the source myself">Verify</button>';
+  html += '<button type="button" data-action="edit" class="btn" title="Close this and edit the text">Edit</button>';
   html += '<button type="button" data-action="dismiss" class="btn" title="Hide this check">Dismiss</button>';
   html += "</div>";
 
@@ -335,29 +356,29 @@ function renderPopup(paste) {
 // ---------------------------------------------------------------
 
 function openPopup(id) {
-  const paste = pastes[id];
-  if (!paste || getSpansForPaste(id).length === 0) {
+  const record = getRecord(id);
+  if (!record || !isInEditor(id)) {
     return;
   }
-  openPasteId = id;
-  popup.innerHTML = renderPopup(paste);
+  openRecordId = id;
+  popup.innerHTML = renderPopup(record);
   popup.hidden = false;
   positionPopup();
 }
 
 /**
- * Places the pop-up just below the highlighted span.
+ * Places the pop-up just below the highlighted citation.
  * getBoundingClientRect() gives a position relative to the visible window,
  * so we add the scroll offset to get a position on the whole page
  * (the pop-up uses position: absolute).
  */
 function positionPopup() {
-  if (!openPasteId) {
+  if (!openRecordId) {
     return;
   }
-  const span = getSpansForPaste(openPasteId)[0];
+  const span = getSpansForRecord(openRecordId)[0];
   const rect = span.getBoundingClientRect();
-  const gap = 8;
+  const gap = APP_CONFIG.popupGap;
 
   let left = rect.left + window.scrollX;
   // Keep the pop-up inside the window on the right-hand side.
@@ -371,13 +392,13 @@ function positionPopup() {
 function closePopup() {
   popup.hidden = true;
   popup.innerHTML = "";
-  openPasteId = null;
+  openRecordId = null;
 }
 
-// Keep the pop-up attached to its span when the window size changes.
+// Keep the pop-up attached to its highlight when the window size changes.
 window.addEventListener("resize", positionPopup);
 
-// Reopen the pop-up by clicking on a highlighted span.
+// Open the pop-up by clicking on a highlight (any level).
 editor.addEventListener("click", function (event) {
   const span = findFlagSpan(event.target);
   if (span) {
@@ -387,14 +408,14 @@ editor.addEventListener("click", function (event) {
 
 // Close on Escape.
 document.addEventListener("keydown", function (event) {
-  if (event.key === "Escape" && openPasteId) {
+  if (event.key === "Escape" && openRecordId) {
     closePopup();
   }
 });
 
-// Close when clicking anywhere except the pop-up or a highlighted span.
+// Close when clicking anywhere except the pop-up or a highlight.
 document.addEventListener("mousedown", function (event) {
-  if (!openPasteId) {
+  if (!openRecordId) {
     return;
   }
   if (popup.contains(event.target) || findFlagSpan(event.target)) {
@@ -405,7 +426,7 @@ document.addEventListener("mousedown", function (event) {
 
 // If the student deletes the highlighted text, close its pop-up too.
 editor.addEventListener("input", function () {
-  if (openPasteId && getSpansForPaste(openPasteId).length === 0) {
+  if (openRecordId && !isInEditor(openRecordId)) {
     closePopup();
   }
 });
@@ -417,34 +438,34 @@ editor.addEventListener("input", function () {
 // One listener for all pop-up buttons; data-action says which one was clicked.
 popup.addEventListener("click", function (event) {
   const button = event.target.closest("[data-action]");
-  if (!button || !openPasteId) {
+  if (!button || !openRecordId) {
     return;
   }
-  const id = openPasteId;
+  const id = openRecordId;
   const action = button.dataset.action;
 
   if (action === "verify") {
-    verifyPaste(id);
+    verifyRecord(id);
   } else if (action === "edit") {
-    editPaste(id);
+    editRecord(id);
   } else if (action === "dismiss") {
-    dismissPaste(id);
+    dismissRecord(id);
   } else if (action === "close") {
     closePopup();
   }
 });
 
-/** Verify: the student says they have checked the source(s). */
-function verifyPaste(id) {
+/** Verify: the student says they have checked the source. */
+function verifyRecord(id) {
   setStatus(id, "verified");
   logEvent("verify", id);
   closePopup();
 }
 
-/** Edit: close the pop-up and put the cursor at the end of the pasted text. */
-function editPaste(id) {
+/** Edit: close the pop-up and put the cursor at the end of the citation. */
+function editRecord(id) {
   closePopup();
-  const spans = getSpansForPaste(id);
+  const spans = getSpansForRecord(id);
   const lastSpan = spans[spans.length - 1];
 
   editor.focus();
@@ -458,19 +479,20 @@ function editPaste(id) {
 }
 
 /** Dismiss: mark as dismissed and offer Undo for a few seconds. */
-function dismissPaste(id) {
-  pastes[id].statusBeforeDismiss = pastes[id].status;
+function dismissRecord(id) {
+  const record = getRecord(id);
+  record.statusBeforeDismiss = record.status;
   setStatus(id, "dismissed");
   logEvent("dismiss", id);
   closePopup();
   showUndoToast(id);
 }
 
-/** Undo a dismiss: put back the status the paste had before. */
+/** Undo a dismiss: put back the status the citation had before. */
 function undoDismiss(id) {
-  const paste = pastes[id];
-  if (paste && paste.status === "dismissed" && paste.statusBeforeDismiss) {
-    setStatus(id, paste.statusBeforeDismiss);
+  const record = getRecord(id);
+  if (record && record.status === "dismissed") {
+    setStatus(id, record.statusBeforeDismiss || "unverified");
     logEvent("undo-dismiss", id);
   }
   hideToast();
@@ -486,7 +508,7 @@ function showUndoToast(id) {
   });
   toast.hidden = false;
 
-  undoTimer = setTimeout(hideToast, UNDO_SECONDS * 1000);
+  undoTimer = setTimeout(hideToast, APP_CONFIG.undoSeconds * 1000);
 }
 
 function hideToast() {
@@ -503,7 +525,7 @@ function hideToast() {
 const eventLog = [];
 
 function logEvent(action, id) {
-  const entry = { time: new Date().toISOString(), action: action, pasteId: id };
+  const entry = { time: new Date().toISOString(), action: action, citationId: id };
   eventLog.push(entry);
   console.log("[event]", entry);
 }

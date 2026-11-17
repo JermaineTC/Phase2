@@ -20,6 +20,8 @@
   --verified-line: #2d9d5a;
   --dismissed-bg: #eceff2;    /* grey: student dismissed  */
   --dismissed-line: #9aa5b1;
+  --likely-line: #7cc79a;     /* soft green: likely supported, NOT verified */
+  --quiet-line: #b8c0c9;      /* neutral grey: not fully checked */
 }
 
 * {
@@ -154,33 +156,42 @@ body {
   color: var(--muted);
 }
 
-/* ---------- Highlighted (flagged) pastes ---------- */
-/* Every flagged paste is a <span class="paste-flag flag-<status>"> */
+/* ---------- Citation highlights ---------- */
+/* Every citation is a <span class="paste-flag level-<level> status-<status>"> */
 .paste-flag {
   cursor: pointer;
   border-radius: 3px;
   padding: 1px 0;
-  border-bottom: 2px solid transparent;
 }
 
-.flag-unverified {
-  background: var(--unverified-bg);
-  border-bottom-color: var(--unverified-line);
-}
-
-.flag-not-found {
+/* "problem": strong highlight – background + solid underline */
+.level-problem {
   background: var(--not-found-bg);
-  border-bottom-color: var(--not-found-line);
+  border-bottom: 2px solid var(--not-found-line);
 }
 
-.flag-verified {
+/* "likely-supported": soft green DASHED underline only, no background,
+   so it cannot be mistaken for a verified citation */
+.level-likely-supported {
+  border-bottom: 2px dashed var(--likely-line);
+}
+
+/* "quiet": subtle neutral dotted underline */
+.level-quiet {
+  border-bottom: 2px dotted var(--quiet-line);
+}
+
+/* Status overrides (after the student acts) */
+.paste-flag.status-verified,
+.swatch.status-verified {
   background: var(--verified-bg);
-  border-bottom-color: var(--verified-line);
+  border-bottom: 2px solid var(--verified-line);
 }
 
-.flag-dismissed {
+.paste-flag.status-dismissed,
+.swatch.status-dismissed {
   background: var(--dismissed-bg);
-  border-bottom-color: var(--dismissed-line);
+  border-bottom: 2px solid var(--dismissed-line);
 }
 
 /* ---------- Pop-up ---------- */
@@ -348,4 +359,36 @@ body {
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ---------- Level badge in the pop-up ---------- */
+.level-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-problem {
+  background: var(--not-found-bg);
+  color: #8a1f1f;
+}
+
+.badge-likely-supported {
+  background: var(--verified-bg);
+  color: #1e6b3d;
+}
+
+.badge-quiet {
+  background: var(--dismissed-bg);
+  color: var(--muted);
+}
+
+/* The legend swatches for underline-only levels need a visible box */
+.swatch.level-likely-supported,
+.swatch.level-quiet {
+  background: var(--panel);
+  border-radius: 0;
 }
