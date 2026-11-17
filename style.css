@@ -182,3 +182,170 @@ body {
   background: var(--dismissed-bg);
   border-bottom-color: var(--dismissed-line);
 }
+
+/* ---------- Pop-up ---------- */
+/* Positioned by app.js (top/left) just below the highlighted span */
+.popup {
+  position: absolute;
+  z-index: 10;
+  width: 380px;
+  max-width: calc(100vw - 16px);
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+  font-size: 0.9rem;
+}
+
+/* The [hidden] attribute must win over display rules above */
+.popup[hidden],
+.toast[hidden] {
+  display: none;
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.popup-close {
+  border: none;
+  background: none;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.popup-note {
+  margin: 8px 0;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: var(--bg);
+  border-left: 3px dashed var(--muted);
+}
+
+.popup-status {
+  margin: 4px 0 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.citation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.citation {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.citation-raw {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.matched-ref {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Result lines: small coloured dot + text */
+.result::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.result-ok::before,
+.result-supported::before {
+  background: var(--verified-line);
+}
+
+.result-bad::before,
+.result-not_supported::before {
+  background: var(--not-found-line);
+}
+
+.result-partial::before {
+  background: var(--unverified-line);
+}
+
+/* The prompting question */
+.question {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  font-style: italic;
+  background: var(--unverified-bg);
+  border-radius: 4px;
+}
+
+.why-flagged {
+  margin: 8px 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.why-flagged summary {
+  cursor: pointer;
+}
+
+.popup-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+/* ---------- Undo message ("toast") ---------- */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 10px 16px;
+  background: var(--text);
+  color: #ffffff;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.toast-undo {
+  margin-left: 8px;
+  border: none;
+  background: none;
+  color: #9ec3ff;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

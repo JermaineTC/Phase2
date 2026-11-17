@@ -21,6 +21,8 @@
 // ---------------------------------------------------------------
 const editor = document.getElementById("editor");
 const counterEl = document.getElementById("unverified-count");
+const popup = document.getElementById("popup");
+const toast = document.getElementById("toast");
 
 // ---------------------------------------------------------------
 // 2. Application state
@@ -31,6 +33,10 @@ const counterEl = document.getElementById("unverified-count");
 // information lives in this object.
 const pastes = {};
 let nextPasteId = 1;
+
+let openPasteId = null;   // id of the paste whose pop-up is open (null = closed)
+let undoTimer = null;     // timer that hides the Undo message
+const UNDO_SECONDS = 6;   // how long the Undo link stays available
 
 // ---------------------------------------------------------------
 // 3. Paste handling
@@ -82,6 +88,9 @@ function handlePaste(event) {
   insertFlagSpan(createFlagSpan(id, text));
   applyStatusClass(id);
   updateCounter();
+
+  // Step 5: show the pop-up next to the pasted text.
+  openPopup(id);
 }
 
 /**
@@ -218,3 +227,282 @@ function updateCounter() {
 
 // Typing or deleting can remove highlighted text, so recount on every edit.
 editor.addEventListener("input", updateCounter);
+
+// ---------------------------------------------------------------
+// 5. Pop-up: rendering
+// ---------------------------------------------------------------
+
+/**
+ * Escapes text before putting it into HTML, so pasted text such as
+ * "<script>" is shown as text and never run as code.
+ */
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Chooses the prompting question for one citation:
+ * a missing reference is the more serious problem, so it comes first;
+ * otherwise use the question for the support result (may be "").
+ */
+function getQuestion(citation) {
+  if (citation.existence === "not_found") {
+    return PROMPTS.existence.not_found.question;
+  }
+  return PROMPTS.support[citation.support].question;
+}
+
+/** Builds the HTML for one citation inside the pop-up. */
+function renderCitation(citation) {
+  let html = '<li class="citation">';
+  html += '<div class="citation-raw">' + escapeHtml(citation.raw) + "</div>";
+
+  // Existence result
+  const existenceClass = citation.existence === "found" ? "result-ok" : "result-bad";
+  html += '<div class="result ' + existenceClass + '">' +
+          escapeHtml(PROMPTS.existence[citation.existence].label) + "</div>";
+
+  // If found, show which local entry it matched so the student can check it
+  if (citation.reference) {
+    html += '<div class="matched-ref">Matched: <em>' + escapeHtml(citation.reference.title) +
+            "</em> (" + escapeHtml(citation.reference.venue) + ")</div>";
+  }
+
+  // Support result (only meaningful when the reference was found)
+  if (citation.existence === "found") {
+    html += '<div class="result result-' + citation.support + '">' +
+            escapeHtml(PROMPTS.support[citation.support].label) + "</div>";
+  }
+
+  // Prompting question, if any
+  const question = getQuestion(citation);
+  if (question) {
+    html += '<p class="question">' + escapeHtml(question) + "</p>";
+  }
+
+  html += "</li>";
+  return html;
+}
+
+/** Builds the complete pop-up HTML for a paste. */
+function renderPopup(paste) {
+  let html = "";
+
+  html += '<div class="popup-header">';
+  html += "<strong>" + escapeHtml(PROMPTS.title) + "</strong>";
+  html += '<button class="popup-close" data-action="close" aria-label="Close">&times;</button>';
+  html += "</div>";
+
+  html += '<p class="popup-note">' + escapeHtml(PROMPTS.simulatedNote) + "</p>";
+  html += '<p class="popup-status">Status: ' + escapeHtml(PROMPTS.status[paste.status]) + "</p>";
+
+  // One list item per detected citation
+  if (paste.citations.length === 0) {
+    html += "<p>" + escapeHtml(PROMPTS.noCitations) + "</p>";
+  } else {
+    html += '<ul class="citation-list">';
+    paste.citations.forEach(function (citation) {
+      html += renderCitation(citation);
+    });
+    html += "</ul>";
+  }
+
+  // Transparency: show why the paste was flagged (the risk score signals)
+  html += '<details class="why-flagged"><summary>Why was this flagged?</summary><ul>';
+  paste.risk.reasons.forEach(function (reason) {
+    html += "<li>" + escapeHtml(reason) + "</li>";
+  });
+  html += "<li>Score " + paste.risk.score + " (flag at " + paste.risk.threshold + " or more)</li>";
+  html += "</ul></details>";
+
+  // Actions: the student decides; nothing is blocked
+  html += '<div class="popup-actions">';
+  html += '<button type="button" data-action="verify" class="btn btn-primary" title="I have checked the source(s) myself">Verify</button>';
+  html += '<button type="button" data-action="edit" class="btn" title="Close this and edit the pasted text">Edit</button>';
+  html += '<button type="button" data-action="dismiss" class="btn" title="Hide this check">Dismiss</button>';
+  html += "</div>";
+
+  return html;
+}
+
+// ---------------------------------------------------------------
+// 6. Pop-up: opening, positioning, closing
+// ---------------------------------------------------------------
+
+function openPopup(id) {
+  const paste = pastes[id];
+  if (!paste || getSpansForPaste(id).length === 0) {
+    return;
+  }
+  openPasteId = id;
+  popup.innerHTML = renderPopup(paste);
+  popup.hidden = false;
+  positionPopup();
+}
+
+/**
+ * Places the pop-up just below the highlighted span.
+ * getBoundingClientRect() gives a position relative to the visible window,
+ * so we add the scroll offset to get a position on the whole page
+ * (the pop-up uses position: absolute).
+ */
+function positionPopup() {
+  if (!openPasteId) {
+    return;
+  }
+  const span = getSpansForPaste(openPasteId)[0];
+  const rect = span.getBoundingClientRect();
+  const gap = 8;
+
+  let left = rect.left + window.scrollX;
+  // Keep the pop-up inside the window on the right-hand side.
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - popup.offsetWidth - gap;
+  left = Math.max(gap, Math.min(left, maxLeft));
+
+  popup.style.top = (rect.bottom + window.scrollY + gap) + "px";
+  popup.style.left = left + "px";
+}
+
+function closePopup() {
+  popup.hidden = true;
+  popup.innerHTML = "";
+  openPasteId = null;
+}
+
+// Keep the pop-up attached to its span when the window size changes.
+window.addEventListener("resize", positionPopup);
+
+// Reopen the pop-up by clicking on a highlighted span.
+editor.addEventListener("click", function (event) {
+  const span = findFlagSpan(event.target);
+  if (span) {
+    openPopup(span.dataset.id);
+  }
+});
+
+// Close on Escape.
+document.addEventListener("keydown", function (event) {
+  if (event.key === "Escape" && openPasteId) {
+    closePopup();
+  }
+});
+
+// Close when clicking anywhere except the pop-up or a highlighted span.
+document.addEventListener("mousedown", function (event) {
+  if (!openPasteId) {
+    return;
+  }
+  if (popup.contains(event.target) || findFlagSpan(event.target)) {
+    return;
+  }
+  closePopup();
+});
+
+// If the student deletes the highlighted text, close its pop-up too.
+editor.addEventListener("input", function () {
+  if (openPasteId && getSpansForPaste(openPasteId).length === 0) {
+    closePopup();
+  }
+});
+
+// ---------------------------------------------------------------
+// 7. Button actions: Verify, Edit, Dismiss, Undo
+// ---------------------------------------------------------------
+
+// One listener for all pop-up buttons; data-action says which one was clicked.
+popup.addEventListener("click", function (event) {
+  const button = event.target.closest("[data-action]");
+  if (!button || !openPasteId) {
+    return;
+  }
+  const id = openPasteId;
+  const action = button.dataset.action;
+
+  if (action === "verify") {
+    verifyPaste(id);
+  } else if (action === "edit") {
+    editPaste(id);
+  } else if (action === "dismiss") {
+    dismissPaste(id);
+  } else if (action === "close") {
+    closePopup();
+  }
+});
+
+/** Verify: the student says they have checked the source(s). */
+function verifyPaste(id) {
+  setStatus(id, "verified");
+  logEvent("verify", id);
+  closePopup();
+}
+
+/** Edit: close the pop-up and put the cursor at the end of the pasted text. */
+function editPaste(id) {
+  closePopup();
+  const spans = getSpansForPaste(id);
+  const lastSpan = spans[spans.length - 1];
+
+  editor.focus();
+  const range = document.createRange();
+  range.selectNodeContents(lastSpan);
+  range.collapse(false); // cursor at the end of the span
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  logEvent("edit", id);
+}
+
+/** Dismiss: mark as dismissed and offer Undo for a few seconds. */
+function dismissPaste(id) {
+  pastes[id].statusBeforeDismiss = pastes[id].status;
+  setStatus(id, "dismissed");
+  logEvent("dismiss", id);
+  closePopup();
+  showUndoToast(id);
+}
+
+/** Undo a dismiss: put back the status the paste had before. */
+function undoDismiss(id) {
+  const paste = pastes[id];
+  if (paste && paste.status === "dismissed" && paste.statusBeforeDismiss) {
+    setStatus(id, paste.statusBeforeDismiss);
+    logEvent("undo-dismiss", id);
+  }
+  hideToast();
+}
+
+function showUndoToast(id) {
+  clearTimeout(undoTimer); // only one Undo message at a time
+
+  toast.innerHTML = escapeHtml(PROMPTS.dismissedToast) +
+                    ' <button class="toast-undo" type="button">Undo</button>';
+  toast.querySelector(".toast-undo").addEventListener("click", function () {
+    undoDismiss(id);
+  });
+  toast.hidden = false;
+
+  undoTimer = setTimeout(hideToast, UNDO_SECONDS * 1000);
+}
+
+function hideToast() {
+  clearTimeout(undoTimer);
+  toast.hidden = true;
+  toast.innerHTML = "";
+}
+
+// ---------------------------------------------------------------
+// 8. Simple interaction log (for your own testing / evaluation)
+// ---------------------------------------------------------------
+// Every action is printed to the browser console (F12 -> Console) and kept in
+// the eventLog array. Type eventLog in the console to see all events so far.
+const eventLog = [];
+
+function logEvent(action, id) {
+  const entry = { time: new Date().toISOString(), action: action, pasteId: id };
+  eventLog.push(entry);
+  console.log("[event]", entry);
+}
