@@ -1,0 +1,1 @@
+AI explanations consistently produce complementary team performance: when an AI system explains its recommendations, human-AI teams outperform both the human and the AI working alone in every task tested (Bansal et al., 2021).

@@ -1,0 +1,3 @@
+Recent work has shown that students who use generative AI writing assistants are significantly more likely to accept fabricated citations without checking them, with acceptance rates rising above 70% when the citation is formatted in a familiar academic style (Hartley & Okonkwo, 2022). This suggests that the visual credibility of a reference can substitute for actual verification, and that writing tools should therefore intervene at the moment text is inserted.
+
+Hartley, M., & Okonkwo, C. (2022). Citation trust and cognitive offloading in AI-assisted academic writing. Journal of Educational Writing Technologies, 14(3), 211-229.
