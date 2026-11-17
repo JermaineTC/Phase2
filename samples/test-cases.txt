@@ -1,0 +1,76 @@
+TEST CASES
+Copy ONE "Text:" block at a time and paste it into the editor.
+Clear the editor between tests (Ctrl+A, Delete) or reload the page (F5).
+
+Note: Morrison & Lee (2023) and van der Berg (2024) are INVENTED test
+references. They are deliberately not in references.js.
+Tests 1-3 depend on the keyQuote fields in references.js, which are still
+empty. Until they are filled in, support is "unknown" for every real reference.
+
+
+=== Test 1: Real reference, accurate claim ===
+Expected: found; supported once the Bansal et al. (2021) keyQuote is filled in
+          (then "likely supported": green dashed underline, no pop-up).
+          Until then: support unknown -> quiet underline, no pop-up.
+Text:
+In experiments with human-AI teams, AI explanations increased the chance that people accepted the AI's recommendation, whether or not the recommendation was correct (Bansal et al., 2021).
+
+
+=== Test 2: Real reference, overstated narrative claim ===
+Expected: found (narrative citation detected); partial or not supported once the
+          keyQuote is filled in. Until then: support unknown -> quiet, no pop-up.
+Text:
+Bansal et al. (2021) proved that explanations always make human-AI teams perform worse, so explanations should never be used.
+
+
+=== Test 3: Real reference, unrelated claim ===
+Expected: found; not supported once the Skitka et al. (1999) keyQuote is filled in
+          (then score 3 -> problem, pop-up opens).
+          Until then: support unknown -> quiet, no pop-up.
+Text:
+Children learning maths online improved their exam scores when given AI tutors (Skitka et al., 1999).
+
+
+=== Test 4: Fake reference ===
+Expected: not found -> problem (red highlight), pop-up opens automatically.
+Text:
+Students who used citation checkers were 40% less likely to submit fabricated references (Morrison & Lee, 2023).
+
+
+=== Test 5: Fake reference-list line ===
+Expected: not found (title fallback finds nothing either) -> problem, pop-up opens.
+Text:
+Morrison, K., & Lee, S. (2023). Citation checking in student writing. Journal of AI Education, 12(3), 45–60.
+
+
+=== Test 6: Plain text, no citations ===
+Expected: no highlight, no pop-up, nothing added to the history.
+Text:
+Writing a good literature review takes time. It means reading the sources yourself, taking notes, and checking that every claim is backed up by what the authors actually wrote.
+
+
+=== Test 7: Several citations in one bracket ===
+Expected: three separate highlights. Skitka and Bansal found (quiet, +1 for
+          "more than one citation"); Morrison & Lee not found (problem, pop-up
+          opens for it).
+Text:
+Over-reliance on AI is well documented (Skitka et al., 1999; Bansal et al., 2021; Morrison & Lee, 2023).
+
+
+=== Test 8: Impossible year ===
+Expected: not found (no Bansal 2031) and the year signal fires
+          (score 3 + 2 = 5) -> problem, pop-up opens.
+Text:
+Explanations change how people rely on AI (Bansal et al., 2031).
+
+
+=== Test 9: Page number ===
+Expected: detected including the page number, found -> quiet, no pop-up.
+Text:
+Automation bias leads people to accept wrong advice (Skitka et al., 1999, p. 993).
+
+
+=== Test 10: Lowercase surname prefix ===
+Expected: detected as "van der Berg", not found -> problem, pop-up opens.
+Text:
+Recent work shows trust rises with citations (van der Berg, 2024).
