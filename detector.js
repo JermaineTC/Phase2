@@ -9,6 +9,8 @@
  * A citation object looks like:
  *   {
  *     raw:     "(Bansal et al., 2021)",   // the exact text that matched
+ *     start:   57,                        // position of raw in the pasted text
+ *     end:     78,                        // position just after raw
  *     type:    "in-text" or "reference-list",
  *     authors: ["Bansal"],                 // surnames we could read
  *     year:    2021,
@@ -83,10 +85,17 @@ function extractCitations(text) {
   BRACKET_WITH_YEAR.lastIndex = 0; // reset, because the regex is global and reused
   while ((match = BRACKET_WITH_YEAR.exec(text)) !== null) {
     const bracketText = match[1];
-    const claim = getClaimForPosition(text, match.index);
+    const bracketStart = match.index; // position of "("
+    const claim = getClaimForPosition(text, bracketStart);
 
     // A bracket may hold several citations separated by ";"
-    bracketText.split(";").forEach(function (part) {
+    const parts = bracketText.split(";");
+    let partStart = bracketStart + 1; // first character after "("
+
+    parts.forEach(function (part) {
+      const thisPartStart = partStart;
+      partStart += part.length + 1; // +1 skips the ";" before the next part
+
       const partMatch = part.match(IN_TEXT_PART);
       if (!partMatch) {
         return; // e.g. "(2021)" on its own or "(see page 2021)" – not a citation
@@ -95,8 +104,23 @@ function extractCitations(text) {
       if (authors.length === 0) {
         return;
       }
+
+      // Where this citation sits in the pasted text (used to highlight it).
+      // A bracket with ONE citation is highlighted including the brackets;
+      // with several, each part is highlighted on its own (without spaces).
+      let start, end;
+      if (parts.length === 1) {
+        start = bracketStart;
+        end = bracketStart + match[0].length;
+      } else {
+        start = thisPartStart + (part.length - part.trimStart().length);
+        end = thisPartStart + part.trimEnd().length;
+      }
+
       citations.push({
-        raw: "(" + part.trim() + ")",
+        raw: text.slice(start, end),
+        start: start,
+        end: end,
         type: "in-text",
         authors: authors,
         year: parseInt(partMatch[2], 10),
@@ -107,7 +131,11 @@ function extractCitations(text) {
   }
 
   // --- 2. Reference-list lines: Smith, J. (2021). Title. Venue. ---
+  let lineStart = 0; // position of the current line in the whole text
   text.split("\n").forEach(function (line) {
+    const thisLineStart = lineStart;
+    lineStart += line.length + 1; // +1 for the "\n"
+
     const lineMatch = line.match(REFERENCE_LINE);
     if (!lineMatch) {
       return;
@@ -116,8 +144,12 @@ function extractCitations(text) {
     if (authors.length === 0) {
       return; // no "Surname, I." pattern, so probably an ordinary sentence
     }
+    const start = thisLineStart + (line.length - line.trimStart().length);
+    const end = thisLineStart + line.trimEnd().length; // trimEnd also drops a Windows "\r"
     citations.push({
-      raw: line.trim(),
+      raw: text.slice(start, end),
+      start: start,
+      end: end,
       type: "reference-list",
       authors: authors,
       year: parseInt(lineMatch[2], 10),
@@ -126,6 +158,8 @@ function extractCitations(text) {
     });
   });
 
+  // Return the citations in the order they appear in the text.
+  citations.sort(function (a, b) { return a.start - b.start; });
   return citations;
 }
 
