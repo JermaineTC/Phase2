@@ -65,7 +65,7 @@ const DETECTOR_CONFIG = {
 
 // A surname: starts with a capital letter (accents allowed, e.g. "Buçinca"),
 // followed by letters, apostrophes or hyphens (e.g. "O'Neil", "Grunde-McLaughlin").
-// À-Þ = accented capitals, À-ÿ = accented letters.
+// \u00C0-\u00DE = accented capitals, \u00C0-\u00FF = accented letters.
 const SURNAME = "[A-Z\\u00C0-\\u00DE][A-Za-z\\u00C0-\\u00FF'\\-]+";
 
 // Optional lowercase prefixes before a surname, e.g. "van der Berg",
@@ -76,7 +76,7 @@ const SURNAME_PREFIX = "(?:(?:van|von|der|den|de|da|di|du|del|della|dos|das|la|l
 const FULL_SURNAME = SURNAME_PREFIX + SURNAME;
 
 // Optional page numbers after the year: ", p. 4" or ", pp. 4–6"
-// (– is the en dash "–", which is normally used in page ranges).
+// (\u2013 is the en dash "–", which is normally used in page ranges).
 const PAGES = "(?:,\\s*pp?\\.\\s*\\d+(?:\\s*[\\u2013\\-]\\s*\\d+)?)?";
 
 // PLANNED: numbered citations such as "[1]" or "[2, 3]" (IEEE style) are

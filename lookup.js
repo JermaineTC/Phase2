@@ -45,7 +45,7 @@ const STOPWORDS = [
 function normaliseName(name) {
   return name
     .normalize("NFD")                 // split "ç" into "c" + accent mark
-    .replace(/[̀-ͯ]/g, "")  // remove the accent marks
+    .replace(/[\u0300-\u036f]/g, "")  // remove the accent marks
     .toLowerCase()
     .trim();
 }
@@ -90,7 +90,7 @@ function lookupReference(citation) {
 function extractKeywords(text) {
   const words = text
     .toLowerCase()
-    .split(/[^a-z0-9à-ÿ]+/); // split on anything that is not a letter/digit
+    .split(/[^a-z0-9\u00e0-\u00ff]+/); // split on anything that is not a letter/digit
 
   const keywords = [];
   words.forEach(function (word) {
