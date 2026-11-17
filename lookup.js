@@ -153,8 +153,44 @@ function extractKeywords(text) {
 }
 
 /**
+ * Very simple stemming: strips a trailing "es" or "s" so that e.g.
+ * "explanations" and "explanation" are compared as the same word.
+ * Words of 3 letters or fewer are left alone (e.g. "has", "bus").
+ *
+ * This is DELIBERATELY simple: it does not know English grammar, so some
+ * words are cut wrongly (e.g. "makes" -> "mak" but "make" stays "make").
+ * PLANNED: proper stemming (e.g. the Porter stemmer) or semantic / LLM-based
+ * matching of the claim against the source.
+ */
+function stemWord(word) {
+  if (word.length <= 3) {
+    return word;
+  }
+  if (word.endsWith("es")) {
+    return word.slice(0, -2);
+  }
+  if (word.endsWith("s")) {
+    return word.slice(0, -1);
+  }
+  return word;
+}
+
+/** Stems a list of keywords and removes duplicates created by stemming. */
+function stemKeywords(words) {
+  const stems = [];
+  words.forEach(function (word) {
+    const stem = stemWord(word);
+    if (stems.indexOf(stem) === -1) {
+      stems.push(stem);
+    }
+  });
+  return stems;
+}
+
+/**
  * Estimates whether the reference's keyQuote supports the claim by
  * measuring what proportion of the claim's keywords also appear in the quote.
+ * Both sides are stemmed first (see stemWord).
  * Returns "unknown" when there is nothing to compare.
  */
 function checkSupport(claimText, reference) {
@@ -162,12 +198,12 @@ function checkSupport(claimText, reference) {
     return "unknown"; // reference not found, or no keyQuote stored yet
   }
 
-  const claimWords = extractKeywords(claimText || "");
+  const claimWords = stemKeywords(extractKeywords(claimText || ""));
   if (claimWords.length === 0) {
     return "unknown"; // e.g. a reference-list line with no claim attached
   }
 
-  const quoteWords = extractKeywords(reference.keyQuote);
+  const quoteWords = stemKeywords(extractKeywords(reference.keyQuote));
   const matchedWords = claimWords.filter(function (word) {
     return quoteWords.indexOf(word) !== -1;
   });
