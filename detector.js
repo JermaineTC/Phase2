@@ -31,6 +31,10 @@ const DETECTOR_CONFIG = {
     // The reference was not found in the local list: it may be made up.
     notFound: 3,
 
+    // Found only by the title fallback: the title is real but the authors
+    // or year differ – a typical pattern of a fabricated reference.
+    matchedByTitle: 3,
+
     // The reference was found, but its stored quote does not match the claim.
     notSupported: 3,
 
@@ -331,7 +335,8 @@ function getClaim(text, citationStart, citationEnd) {
  * Scores ONE citation from its lookup and support results plus two
  * signals about the paste it came from.
  * Must be called AFTER lookupReference() and checkSupport(), because it
- * reads citation.existence and citation.support.
+ * reads citation.existence, citation.matchedBy and citation.support
+ * (all set in app.js).
  *
  *   citation       – a citation object with .existence, .support and .year
  *   pasteText      – the whole pasted text (for the long-paste signal)
@@ -355,6 +360,9 @@ function riskScore(citation, pasteText, citationCount) {
   // Result of the existence check
   if (citation.existence === "not_found") {
     addSignal(weights.notFound, "Reference not found in the local list");
+  }
+  if (citation.matchedBy === "title") {
+    addSignal(weights.matchedByTitle, "Matched by title only – authors or year differ");
   }
 
   // Result of the support check (only meaningful if the reference was found)
