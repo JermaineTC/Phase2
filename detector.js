@@ -26,7 +26,14 @@
 // support check, so it scores the RESULTS rather than just "has a citation".
 // ---------------------------------------------------------------
 const DETECTOR_CONFIG = {
-  // TODO(me): tune
+  // How the weights were tuned (after testing with samples/test-cases.txt):
+  //   - A clear problem on its own reaches the threshold (3) and opens the
+  //     pop-up: not found, matched by title only, not supported.
+  //   - A weaker problem stays below it (partial: 2) and only interrupts
+  //     when another signal adds to it, e.g. several citations in one paste.
+  //   - The paste-level signals (implausible year, several citations, long
+  //     paste) are the original starter values; they only add to a score
+  //     and were not tuned separately.
   weights: {
     // The reference was not found in the local list: it may be made up.
     notFound: 3,
