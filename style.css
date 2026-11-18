@@ -282,6 +282,15 @@ body {
   background: var(--unverified-line);
 }
 
+/* Key quote from the matched reference */
+.key-quote {
+  margin: 6px 0 0;
+  padding: 4px 8px;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
 /* The prompting question */
 .question {
   margin: 6px 0 0;

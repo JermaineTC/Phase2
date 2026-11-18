@@ -536,6 +536,11 @@ function renderPopup(record) {
             escapeHtml(PROMPTS.support[record.support].label) + "</div>";
   }
 
+  // Key quote from the matched reference, so the student can compare it with the claim
+  if (record.reference && record.reference.keyQuote) {
+    html += '<blockquote class="key-quote">"' + escapeHtml(record.reference.keyQuote) + '"</blockquote>';
+  }
+
   // Prompting question, if any
   const question = getQuestion(record);
   if (question) {
