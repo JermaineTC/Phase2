@@ -39,9 +39,12 @@ const DETECTOR_CONFIG = {
     notSupported: 3,
 
     // The stored quote matches only part of the claim (possible overstatement).
-    // Set to the threshold so that a partial match on its own opens the
-    // pop-up and asks "Does it actually say this?" (storyboard 3).
-    partial: 3,
+    // Deliberately BELOW the threshold: a partial match on its own does not
+    // interrupt. It gets an underline, and the "Does it actually say this?"
+    // question appears when the student clicks it. Only a clearer problem
+    // (not found, not supported) opens the pop-up by itself, so the strength
+    // of the interruption matches how serious the problem is.
+    partial: 2,
 
     // A year before earliestYear or after the current year is unusual for
     // this topic and a typical sign of a fabricated reference.

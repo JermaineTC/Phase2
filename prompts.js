@@ -2,7 +2,7 @@
  * prompts.js – all the wording shown in the pop-up, kept in one place
  * so it can be changed without touching the logic in app.js.
  *
- * TODO(me): refine wording
+ * Wording kept as is for the prototype; evaluated with samples/test-cases.txt
  *
  * "label"    = short result line shown for the citation
  * "question" = prompting question shown under the citation ("" = none)
