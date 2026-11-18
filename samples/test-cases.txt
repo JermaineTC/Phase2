@@ -76,3 +76,29 @@ Automation bias leads people to accept wrong advice (Skitka et al., 1999, p. 993
 Expected: detected as "van der Berg", not found -> problem, pop-up opens.
 Text:
 Recent work shows trust rises with citations (van der Berg, 2024).
+
+
+=== Test 11: Misspelled author ===
+Expected: not found (lookup does not tolerate typos) -> problem, pop-up opens.
+Text:
+Explanations increased the chance that humans accept the AI's recommendation, regardless of correctness (Bansel et al., 2021).
+
+
+=== Test 12: Close to source wording (Bansal) ===
+Expected: found; likely supported -> soft green dashed underline, no pop-up.
+Text:
+Explanations increased the chance that humans accept the AI's recommendation, regardless of correctness (Bansal et al., 2021).
+
+
+=== Test 13: Close to source wording (Buçinca) ===
+Expected: found; likely supported -> soft green dashed underline, no pop-up.
+Text:
+Cognitive forcing significantly reduced overreliance compared to simple explainable AI approaches (Buçinca et al., 2021).
+
+
+=== Test 14: Real title, wrong authors and year ===
+Expected: matched by title only (+3 risk) -> problem, pop-up opens with
+          "Matched by title only".
+Text:
+Bansal, G., Wu, T., & Weld, D. (2020). Does the whole exceed its parts? The effect of AI explanations on complementary team performance. CHI.
+
