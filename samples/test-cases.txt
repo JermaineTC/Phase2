@@ -18,7 +18,8 @@ In experiments with human-AI teams, AI explanations increased the chance that pe
 
 === Test 2: Real reference, overstated narrative claim ===
 Expected: found (narrative citation detected); partial or not supported once the
-          keyQuote is filled in. Until then: support unknown -> quiet, no pop-up.
+          keyQuote is filled in (either way score 3 -> problem, pop-up opens).
+          Until then: support unknown -> quiet, no pop-up.
 Text:
 Bansal et al. (2021) proved that explanations always make human-AI teams perform worse, so explanations should never be used.
 
