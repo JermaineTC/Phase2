@@ -60,9 +60,14 @@ function normaliseName(name) {
  *   1. First try: same FIRST author and same year.
  *   2. Fallback (reference-list lines only): enough of the stored title's
  *      main words appear in the cited title (see findByTitle).
- * TODO(me): improve matching
- *   (e.g. allow small typos, handle two different papers by the same
- *    first author in the same year)
+ *
+ * Design decision: matching is EXACT on purpose (ignoring only case and
+ * accents), so small typos are NOT tolerated. If "Bansel (2021)" counted
+ * as found, the typo could stay in the student's final work. A misspelled
+ * reference is "not found" instead, so the pop-up opens and prompts the
+ * student to check it.
+ * PLANNED: handle two different papers by the same first author in the
+ * same year (currently the first match in REFERENCES wins).
  */
 function findReference(citation) {
   return findByAuthorYear(citation) || findByTitle(citation);
