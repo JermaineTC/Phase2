@@ -153,26 +153,26 @@ function extractKeywords(text) {
 }
 
 /**
- * Very simple stemming: strips a trailing "es" or "s" so that e.g.
- * "explanations" and "explanation" are compared as the same word.
- * Words of 3 letters or fewer are left alone (e.g. "has", "bus").
+ * Very simple stemming, so that e.g. "explanations" and "explanation" are
+ * compared as the same word:
+ *   - words of 3 letters or fewer are left alone ("has", "bus")
+ *   - "es" is only stripped after s, x, ch or sh ("processes" -> "process",
+ *     "boxes" -> "box", "approaches" -> "approach")
+ *   - otherwise a single "s" is stripped ("makes" -> "make",
+ *     "reduces" -> "reduce"), but not from words ending in "ss"
+ *     ("process" stays "process")
  *
  * This is DELIBERATELY simple: it does not know English grammar, so some
- * words are cut wrongly (e.g. "makes" -> "mak" but "make" stays "make").
+ * words are still cut oddly (e.g. "analysis" -> "analysi"). That is
+ * harmless as long as both sides are cut the same way.
  * PLANNED: proper stemming (e.g. the Porter stemmer) or semantic / LLM-based
  * matching of the claim against the source.
  */
-function stemWord(word) {
-  if (word.length <= 3) {
-    return word;
-  }
-  if (word.endsWith("es")) {
-    return word.slice(0, -2);
-  }
-  if (word.endsWith("s")) {
-    return word.slice(0, -1);
-  }
-  return word;
+function stemWord(w) {
+  if (w.length <= 3) return w;
+  if (/(s|x|ch|sh)es$/.test(w)) return w.slice(0, -2); // processes → process
+  if (w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1); // makes → make
+  return w; // process stays process
 }
 
 /** Stems a list of keywords and removes duplicates created by stemming. */
