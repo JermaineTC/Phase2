@@ -1,7 +1,7 @@
 <!--
 BEFORE SUBMITTING (hidden on GitHub):
 [ ] Enable GitHub Pages and check the live link works
-[ ] Add docs/system-diagram.png (and optionally docs/storyboards/)
+[x] Add docs/system-diagram.png and docs/storyboards/
 [ ] Fill the [brackets] – they mark things only you know
 [ ] Count prose words (exclude code, commands, tables) and fill in [X]
 [ ] Tag v1.0-a2 after the final commit
@@ -9,7 +9,7 @@ BEFORE SUBMITTING (hidden on GitHub):
 
 # Selective citation checking at the point of reuse
 
-**IIS Assignment 2** · README prose word count: [X] (code, commands and tables excluded)
+**IIS Assignment 2** · README word count: [X] (code, commands and tables excluded)
 **Submitted version:** release [`v1.0-a2`](https://github.com/JermaineTC/Phase2/releases/tag/v1.0-a2)
 **Live version:** https://jermainetc.github.io/Phase2/
 
@@ -27,6 +27,7 @@ A browser-based writing editor that checks citations when a student pastes AI-ge
 | Reference existence check against 8 real references, with title-keyword fallback | **Simulated** (local list, no live database) |
 | Claim–support check: keyword overlap with one sentence from each paper's abstract | Implemented logic on **simulated** source data |
 | Pop-up with Verify / Edit / Dismiss, Undo, prompting questions and "Why was this flagged?" | Implemented |
+| Stored key quote shown in the pop-up under the support result | Implemented |
 | Highlights removed once verified or dismissed | Implemented |
 | Session history panel with Unverified / Verified / Dismissed counts | Implemented (session only) |
 | Live reference lookup (e.g. CrossRef) | Planned |
@@ -87,7 +88,7 @@ Press F12 and type `eventLog` in the console to see the Verify, Edit, Dismiss an
 
 Each entry gives the change, why it was made, how it was checked and who did what. All commits: [commit history](https://github.com/JermaineTC/Phase2/commits/main).
 
-**1. First build** (first 7 commits)
+**1. First build** (first 7 commits, `bb35d8e` to `8c93909`)
 - **Change:** paste → detect → simulated lookup → support check → pop-up with Verify / Edit / Dismiss.
 - **Why:** this is the core of my A1 proposal: prompt checking at the moment of reuse. I chose `contenteditable` because the pop-up needs to sit next to the pasted text, and a simulated lookup so it runs without API keys.
 - **Checked:** stage 1 in `test-results.md`.
@@ -127,13 +128,21 @@ Each entry gives the change, why it was made, how it was checked and who did wha
 
 **9. Matching interruption strength to the problem** (`722e865`, then `7ce0962`)
 - **Change:** `partial` was raised to 3, then lowered back to 2.
-- **Why:** raising it made partial matches open the prompting question. But with real quotes, accurate paraphrases also scored partial (test 1: "people" vs "humans", "accepted" vs "accept"), so nearly every real citation opened the pop-up. I chose to put it back at 2: clear problems (not found, title-only match, not supported) interrupt, while a partial match gets an underline and its question on click. [Add one sentence in your own words.]
+- **Why:** raising it made partial matches open the prompting question. But with real quotes, accurate paraphrases also scored partial (test 1: "people" vs "humans", "accepted" vs "accept"), so nearly every real citation opened the pop-up. I chose to put it back at 2: clear problems (not found, title-only match, not supported) interrupt, while a partial match gets an underline and its question on click. I chose this because it keeps the interruption selective: if the pop-up keeps opening when a citation is correct, students may find it easier to just dismiss it, which is the cry-wolf effect. The trade-off is that a weak problem is sometimes missed, and a partial match in a long or multi-citation paste still reaches 3 and opens the pop-up.
 - **Checked:** stage 5 in `test-results.md`: test 1 is quiet with the question on click; tests 2–5 and 7–11 still open the pop-up.
 
 **10. No typo tolerance** (`4de75d9`, documented in `c2ffd93`)
 - **Change:** author matching is exact, ignoring only case and accents.
-- **Why:** if "Bansel (2021)" counted as found, the typo could stay in the student's final work. Treating it as not found prompts a check. [Reword in your own words if needed.]
+- **Why:** if "Bansel (2021)" counted as found, the typo could stay in the student's final work. Treating it as not found prompts a check. An earlier version allowed small typos, but I changed this so students actively check their work when something looks like an error. If the misspelling were allowed through, it could end up in their final work, and Ding et al. (2025) found that only around 10% of citations are ever checked.
 - **Checked:** test 11 in `test-results.md`.
+
+**11. Showing the key quote in the pop-up** (`0eb7988`)
+- **Change:** the pop-up shows the paper's stored `keyQuote` under the support result.
+- **Why:** this is the main idea of my A1 contribution. Before, the system compared the claim with the quote but only showed its verdict. Showing the sentence lets the student compare the claim with the paper's own words, which makes checking cheaper (Vasconcelos et al., 2023).
+
+**12. Wording for unflagged citations**
+- **Change:** the explanation section is headed "Why was this flagged?" only for problems; for the other levels it says "How was this scored?".
+- **Why:** review feedback pointed out that a citation with score 0 was labelled as "flagged", which contradicts the selective design.
 
 **Changes since A1**
 - A1 listed paraphrased or partly supported claims as a limitation. The system now detects partial matches and asks a prompting question instead.
@@ -143,10 +152,18 @@ Each entry gives the change, why it was made, how it was checked and who did wha
 
 - **Tools:** Claude (claude.ai) for planning, suggesting design options and drafting the specifications I gave Claude Code; Claude Code for implementing and testing those specifications.
 - **Who did what:** design decisions are mine. For some, Claude suggested options and I chose between them. Claude Code wrote most of the code from my specifications. I chose and checked the source quotes, ran the final tests, and made the last weight and matching decisions. No code was reused from other projects.
+- **Report, README, storyboards and diagram:** Claude helped draft the report's design rationale and abstract from my notes, my A1 review and the code, and drafted this README from my development notes and commit history. I checked each claim against the code and `test-results.md`, corrected the ones that were wrong (for example, saving across reloads is planned, not built), and rewrote entries 9 and 10 from my own notes. Claude drew the final storyboards from my storyboard plan; I checked every screen against `prompts.js` and `app.js` and asked for changes where they did not match. I drew the system diagram in Excalidraw and revised it after reviewing it with Claude.
 - **Example 1, a problem I found myself:** while testing, I noticed new typing going inside verified highlights. I asked for the cause to be fixed rather than worked around, and retested by typing after verified and unverified highlights.
 - **Example 2, reviewed and kept:** Claude Code added a "Why was this flagged?" section I hadn't asked for. I kept it because it shows the student why the system acted (Amershi et al., 2019).
 - **Example 3, flagged by AI, decided by me:** Claude Code pointed out that its stemming rule broke matches. Claude supplied a corrected rule; I applied it and tested the word pairs myself.
 
 ## Additional files
 
-- `test-results.md`: expected vs actual results at each stage
+| File | Purpose |
+|---|---|
+| [`docs/abstract.md`](docs/abstract.md) | Report abstract |
+| [`docs/design-rationale.md`](docs/design-rationale.md) | Report design rationale and project explanation |
+| [`docs/references.md`](docs/references.md) | Reference list for the report and README |
+| [`docs/system-diagram.png`](docs/system-diagram.png) | System diagram |
+| [`docs/storyboards/`](docs/storyboards/) | Three storyboards: paraphrased citation, fabricated reference, false alarm |
+| `samples/fake-reference.txt`, `samples/partial-support.txt`, `samples/plain-text.txt` | Early test inputs, used in stage 1 of `test-results.md` |
