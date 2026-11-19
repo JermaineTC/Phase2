@@ -549,7 +549,10 @@ function renderPopup(record) {
 
   // Transparency: every signal that fired, and the total score.
   // Shown for all three levels.
-  html += '<details class="why-flagged"><summary>Why was this flagged?</summary><ul>';
+  // Only a "problem" was actually flagged; for the other levels the same
+  // section just explains the score, so the wording says so.
+  const whyLabel = record.level === "problem" ? "Why was this flagged?" : "How was this scored?";
+  html += '<details class="why-flagged"><summary>' + whyLabel + '</summary><ul>';
   record.risk.reasons.forEach(function (reason) {
     html += "<li>" + escapeHtml(reason) + "</li>";
   });
