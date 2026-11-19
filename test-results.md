@@ -5,7 +5,7 @@ Each stage says **who ran the tests and how**.
 
 ---
 
-## Stage 1 – Scaffold (spec 01)
+## Stage 1 – Scaffold ([spec 01](docs/specs/01-scaffold.md); commits `bb35d8e` to `8c93909`)
 
 *Run by Claude Code: simulated pastes and clicks in headless Chrome. Then my own run: Ctrl+V in Chrome.*
 
@@ -15,11 +15,11 @@ Each stage says **who ran the tests and how**.
 | plain-text.txt | No flag | Inserted normally, no highlight, counter 0 |
 | partial-support.txt | Found; support depends on keyQuote | Yellow highlight, "Found", support "not checked" (keyQuote empty) |
 
-**Issue found:** with starter weights, "contains citation" (+3) alone reached the threshold, so every paste with a citation was flagged and the risk score wasn't selective. → led to spec 02.
+**Issue found:** with starter weights, "contains citation" (+3) alone reached the threshold, so every paste with a citation was flagged and the risk score wasn't selective. → led to [spec 02](docs/specs/02-design-changes.md).
 
 ---
 
-## Stage 2 – Selective interruption and design changes (spec 02)
+## Stage 2 – Selective interruption and design changes ([spec 02](docs/specs/02-design-changes.md); commits `e987e3f` to `41f1de7`)
 
 *Run by Claude Code: simulated pastes in headless Chrome; real keystrokes and clicks via Chrome DevTools protocol for the boundary fix. keyQuotes still empty.*
 
@@ -42,7 +42,7 @@ Each stage says **who ran the tests and how**.
 
 ---
 
-## Stage 3 – Stemming and weight changes (spec 03, items 1–3)
+## Stage 3 – Stemming and weight changes ([spec 03](docs/specs/03-weight-changes.md), items 1–3)
 
 *Run by me.*
 
@@ -53,7 +53,7 @@ Each stage says **who ran the tests and how**.
 
 ---
 
-## Stage 4 – Real keyQuotes (spec 03, item 4)
+## Stage 4 – Real keyQuotes ([spec 03](docs/specs/03-weight-changes.md), item 4)
 
 *Run by me: Ctrl+V in Chrome.*
 
@@ -62,11 +62,11 @@ Each stage says **who ran the tests and how**.
 | 1 | Real ref, accurate claim | Found, supported | Found, **partial**, pop-up opened | ❌ false alarm |
 | 2–10 | | | Not recorded at this stage: the test 1 problem led straight to the fix below. All tests were re-run in stage 5. | |
 
-**Issue found:** the accurate claim in test 1 scored partial because matching is word-based (people/humans, accepted/accept, correct/correctness, whether or not/regardless of). With partial weighted 3, nearly every real citation opened the pop-up, so interruption was no longer selective. → led to spec 03, item 5.
+**Issue found:** the accurate claim in test 1 scored partial because matching is word-based (people/humans, accepted/accept, correct/correctness, whether or not/regardless of). With partial weighted 3, nearly every real citation opened the pop-up, so interruption was no longer selective. → led to [spec 03](docs/specs/03-weight-changes.md), item 5.
 
 ---
 
-## Stage 5 – Final, after interruption fix and typo decision (spec 03, items 5–6; commits `7ce0962`, `4de75d9`)
+## Stage 5 – Final, after interruption fix and typo decision ([spec 03](docs/specs/03-weight-changes.md), items 5–6; commits `7ce0962`, `4de75d9`)
 
 *Run by me: Ctrl+V in Chrome on the submitted version.*
 

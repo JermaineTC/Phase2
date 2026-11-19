@@ -86,7 +86,9 @@ Press F12 and type `eventLog` in the console to see the Verify, Edit, Dismiss an
 
 ## Development record
 
-Each entry gives the change, why it was made, how it was checked and who did what. All commits: [commit history](https://github.com/JermaineTC/Phase2/commits/main).
+Each entry gives the change, why it was made, how it was checked and who did what. All commits: [commit history](https://github.com/JermaineTC/Phase2/commits/main). The specifications I gave Claude Code are in [`docs/specs/`](docs/specs/): [spec 01](docs/specs/01-scaffold.md) (entry 1), [spec 02](docs/specs/02-design-changes.md) (entries 2–5) and [spec 03](docs/specs/03-weight-changes.md) (entries 6–10).
+
+Build period: 17 Nov 17:23 to 18 Nov 19:53. Later commits are documentation and two UI changes made after review (entries 11 and 12).
 
 **1. First build** (first 7 commits, `bb35d8e` to `8c93909`)
 - **Change:** paste → detect → simulated lookup → support check → pop-up with Verify / Edit / Dismiss.
@@ -169,5 +171,6 @@ Each entry gives the change, why it was made, how it was checked and who did wha
 | [`docs/design-rationale.md`](docs/design-rationale.md) | Report design rationale and project explanation |
 | [`docs/references.md`](docs/references.md) | Reference list for the report and README |
 | [`docs/system-diagram.png`](docs/system-diagram.png) | System diagram |
+| [`docs/specs/`](docs/specs/) | The three specifications I gave Claude Code, with the decisions and resulting commits |
 | [`docs/storyboards/`](docs/storyboards/) | Three storyboards: paraphrased citation, fabricated reference, false alarm |
 | `samples/fake-reference.txt`, `samples/partial-support.txt`, `samples/plain-text.txt` | Early test inputs, used in stage 1 of `test-results.md` |
