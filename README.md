@@ -106,10 +106,12 @@ Each entry gives the change, why it was made, how it was checked and who did wha
 **4. Session history panel** (`c275e4f`)
 - **Change:** Unverified / Verified / Dismissed counts and a clickable list of citations.
 - **Why:** once resolved highlights disappear, the student still needs a record of what they checked or dismissed.
+- **Checked:** verified and dismissed a citation; the counts and list updated.
 
 **5. More citation formats** (`a6aac44`, `266db69`, fix `b0c573d`)
 - **Change:** narrative citations ("Smith et al. (2021) found…"), page numbers, surname prefixes, and title matching for reference-list lines.
 - **Why:** the first build missed narrative citations, which AI-generated text often uses.
+- **Checked:** tests 2, 9, 10 and 14 in `test-results.md`.
 
 **6. Stemming fix** (`13ba15a`, then `17b4b1e`)
 - **Change:** "es" is now stripped only after s/x/ch/sh, and words ending in "ss" are kept.
@@ -139,10 +141,12 @@ Each entry gives the change, why it was made, how it was checked and who did wha
 **11. Showing the key quote in the pop-up** (`0eb7988`)
 - **Change:** the pop-up shows the paper's stored `keyQuote` under the support result.
 - **Why:** this is the main idea of my A1 contribution. Before, the system compared the claim with the quote but only showed its verdict. Showing the sentence lets the student compare the claim with the paper's own words, which makes checking cheaper (Vasconcelos et al., 2023).
+- **Checked:** pasted tests 2 and 12 in Chrome; the quote appears under the result.
 
-**12. Wording for unflagged citations**
+**12. Wording for unflagged citations** (`13da7be`)
 - **Change:** the explanation section is headed "Why was this flagged?" only for problems; for the other levels it says "How was this scored?".
 - **Why:** review feedback pointed out that a citation with score 0 was labelled as "flagged", which contradicts the selective design.
+- **Checked:** test 12 shows "How was this scored?", test 4 shows "Why was this flagged?".
 
 **Changes since A1**
 - A1 listed paraphrased or partly supported claims as a limitation. The system now detects partial matches and asks a prompting question instead.
