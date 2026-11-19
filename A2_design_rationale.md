@@ -31,9 +31,3 @@ Verified and dismissed citations go back to plain text, so highlights only mark 
 ### Limitations and planned features
 
 The paste is handled by the code and inserted as plain text, so the browser's normal Ctrl+Z does not undo it. This reduces reversibility. Pasting the wrong text is a slip, and the remedy for slips is undo, so restoring native undo is planned. The support check also compares wording, not meaning. A claim that correctly paraphrases the quote can be flagged as unsupported, adding false alarms, while a claim that reuses the quote's words but changes what it says could pass. This could give false reassurance, as I noted in A1. A planned "this looks wrong" button would let students report these cases, since a citation should be reportable. Verify records the student's judgement but does not check that they opened the source, and editing a citation does not yet re-run the check (planned). Finally, the system only checks factual claims with a source, not opinion or synthesis.
-
-## References (additions)
-
-Amershi, S., Weld, D., Vorvoreanu, M., Fourney, A., Nushi, B., Collisson, P., Suh, J., Iqbal, S., Bennett, P. N., Inkpen, K., Teevan, J., Kikin-Gil, R., & Horvitz, E. (2019). Guidelines for human-AI interaction. In Proceedings of CHI 2019. ACM.
-
-Breznitz, S. (1984). Cry wolf: The psychology of false alarms. Lawrence Erlbaum Associates.
