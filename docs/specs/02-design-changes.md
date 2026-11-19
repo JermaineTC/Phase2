@@ -3,6 +3,7 @@
 > **Authorship:** design decisions mine, made after testing the scaffold. For some, Claude (claude.ai) suggested options and I chose between them. I gave Claude Code a written specification of these changes (drafted with Claude), and Claude Code implemented and tested them.
 > **Resulting commits (17 Nov, 20:38–20:49):** `e987e3f` to `41f1de7` (10 commits)
 > **Date:** 17 Nov 2026
+> **Note:** the commit count, hashes, times and the file path were added after the build, and decision 3 was reworded to "Undo after Dismiss restores it" to describe what was built more precisely. The instructions are otherwise unchanged.
 
 ## What I found in the scaffold
 - Every citation reached the risk threshold, so every paste was flagged. The design wasn't selective.
