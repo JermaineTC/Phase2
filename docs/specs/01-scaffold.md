@@ -3,6 +3,7 @@
 > **Authorship:** design decisions mine (from my A1 proposal and the A2 plan). I gave Claude Code a written specification (drafted with Claude, claude.ai), and Claude Code implemented it.
 > **Resulting commits (17 Nov, 17:23–17:28):** `bb35d8e` to `8c93909`, the first 7 commits on `main`
 > **Date:** 17 Nov 2026
+> **Note:** the commit hashes, times and the file path were added after the build. The instructions themselves are unchanged.
 
 ## Decisions
 
