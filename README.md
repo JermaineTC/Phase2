@@ -9,7 +9,7 @@ BEFORE SUBMITTING (hidden on GitHub):
 
 # Selective citation checking at the point of reuse
 
-**IIS Assignment 2** · README word count: 1,538 (code, commands and tables excluded)
+**IIS Assignment 2** · README word count: 1,631 (code, commands and tables excluded)
 **Submitted version:** release [`v1.0-a2`](https://github.com/JermaineTC/Phase2/releases/tag/v1.0-a2)
 **Live version:** https://jermainetc.github.io/Phase2/
 
