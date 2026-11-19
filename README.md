@@ -133,7 +133,7 @@ Each entry gives the change, why it was made, how it was checked and who did wha
 
 **10. No typo tolerance** (`4de75d9`, documented in `c2ffd93`)
 - **Change:** author matching is exact, ignoring only case and accents.
-- **Why:** if "Bansel (2021)" counted as found, the typo could stay in the student's final work. Treating it as not found prompts a check. An earlier version allowed small typos, but I changed this so students actively check their work when something looks like an error. If the misspelling were allowed through, it could end up in their final work, and Ding et al. (2025) found that only around 10% of citations are ever checked.
+- **Why:** an earlier version allowed small typos, but I changed this so students actively check their work when something looks like an error. If "Bansel (2021)" counted as found, the typo could end up in their final work, and Ding et al. (2025) found that only around 10% of citations are ever checked.
 - **Checked:** test 11 in `test-results.md`.
 
 **11. Showing the key quote in the pop-up** (`0eb7988`)
