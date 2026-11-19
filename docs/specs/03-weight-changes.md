@@ -3,6 +3,7 @@
 > **Authorship:** every decision in this spec was mine. Some problems I found myself, such as the over-interruption in section 5, which I found in my own testing before choosing between the options. Others were pointed out to me: Claude Code flagged the stemming problem (section 1), and Claude (claude.ai) suggested a corrected rule, which I chose to apply and then tested. I chose the keyQuotes and copied them from the published abstracts myself. All code changes were implemented through Claude Code, but it did not make any of the decisions.
 > **Resulting commits (18 Nov, 18:46–19:53):** `17b4b1e` (stemming), `722e865` (partial → 3), `f4c2051` (matchedByTitle), `e5e7834` (keyQuotes), `7ce0962` (partial → 2), `4de75d9` (no typo tolerance), `c2ffd93` (weight reasoning documented in code)
 > **Date:** 18 Nov 2026
+> **Note:** written up after the build from the instructions I gave Claude Code on 18 Nov. The authorship line, commit hashes, Check lines, the Problem line in section 4 and the reasons in sections 5 and 6 were added afterwards, using my notes from the README. Section 6 was corrected from "stays exact" to "becomes exact" to match commit `4de75d9`.
 
 ## 1. Stemming rule (`17b4b1e`)
 - **Problem:** the "strip es/s" rule turned "makes" into "mak" and "process" into "proces", so singular and plural forms stopped matching.
